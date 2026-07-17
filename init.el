@@ -106,7 +106,7 @@
 (setq desktop-restore-eager 5)
 
 ;; 1. Tell the desktop engine how to save Eshell buffers cleanly without a file
-(defun my/desktop-save-eshell (desktop-dirname)
+(defun my/desktop-save-eshell (_desktop-dirname)
   "Save the directory state of an eshell buffer to the desktop file safely."
   (cons default-directory nil))
 
@@ -117,6 +117,7 @@
         (buf (get-buffer-create buffer-name)))
     (with-current-buffer buf
       (when dir (setq default-directory dir))
+      ;; Initialize eshell environment cleanly without blocking startup
       (unless (derived-mode-p 'eshell-mode)
         (eshell-mode)))
     buf))
@@ -134,6 +135,15 @@
 (add-hook 'eshell-mode-hook
           (lambda ()
             (setq-local desktop-save-buffer 'my/desktop-save-eshell)))
+
+;; 5. Helper function for smart project eshell spawning
+(defun my/project-eshell ()
+  "Open Eshell in the current project root, or current directory if not in a project."
+  (interactive)
+  (let ((default-directory (if (fboundp 'projectile-project-root)
+                               (or (ignore-errors (projectile-project-root)) default-directory)
+                             default-directory)))
+    (eshell t)))
 
 ;; -- Yank Flymake Error at Point ----------------------------
 (defun my/yank-flymake-error ()
@@ -376,7 +386,7 @@
 
     ;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
-    "oe"  '(eshell :which-key "Open eshell")
+    "oe"  '(my/project-eshell :which-key "Open eshell")
 
     ;; Toggles
     "t"   '(:ignore t :which-key "toggles")
