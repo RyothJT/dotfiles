@@ -1,0 +1,851 @@
+;; -- Garbage collection ------------------------------------
+(setq gc-cons-threshold (* 100 1024 1024)) ; 100 MB
+;; Reset it to a reasonable background level after startup completes
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (setq gc-cons-threshold (* 8 1024 1024)))) ; 8 MB
+
+;; -- Package Setup ------------------------------------------
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(package-initialize)
+(setq use-package-always-ensure t)
+
+(unless package-archive-contents
+  (package-refresh-contents))
+
+;; -- Identity -----------------------------------------------
+(setq user-full-name "Justin Troth"
+      user-mail-address "justin.troth@gd-ms.com")
+
+;; -- UI -----------------------------------------------------
+(menu-bar-mode -1)
+(tool-bar-mode -1)
+(scroll-bar-mode -1)
+(setq display-line-numbers-type 'relative)
+(global-display-line-numbers-mode 1)
+(add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
+(setopt display-fill-column-indicator-column 80)
+
+;; Window size at launch
+(setq initial-frame-alist '((width . 180) (height . 41)))
+(setq default-frame-alist initial-frame-alist)
+
+;; Maximize
+(add-to-list 'initial-frame-alist '(fullscreen . maximized))
+
+;; Soft wrap + navigate visual lines (not logical lines)
+(global-visual-line-mode 1)
+(setq-default truncate-lines nil)
+
+;; -- Font ---------------------------------------------------
+(set-face-attribute 'default nil
+  :font "JetBrains Mono"
+  :height 100)
+
+;; Fallback for unicode characters
+(set-fontset-font t 'unicode "Noto Sans" nil 'append)
+
+;; -- Skip special buffers with H/L -------------------------
+(defun my/next-buffer ()
+  "Go to next buffer, skipping special buffers."
+  (interactive)
+  (let ((start (current-buffer)))
+    (next-buffer)
+    (while (and (string-match-p "^\\*" (buffer-name))
+                (not (eq (current-buffer) start)))
+      (next-buffer))))
+
+(defun my/prev-buffer ()
+  "Go to previous buffer, skipping special buffers."
+  (interactive)
+  (let ((start (current-buffer)))
+    (previous-buffer)
+    (while (and (string-match-p "^\\*" (buffer-name))
+                (not (eq (current-buffer) start)))
+      (previous-buffer))))
+
+;; -- Evil Mode ----------------------------------------------
+(use-package evil
+  :init
+  (setq evil-want-integration t)
+  (setq evil-want-keybinding nil)
+  :config
+  (evil-mode 1)
+  (define-key evil-normal-state-map "H" 'my/next-buffer)
+  (define-key evil-normal-state-map "L" 'my/prev-buffer)
+  (define-key evil-normal-state-map "U" 'undo-redo)
+  (global-set-key (kbd "C-=") #'global-text-scale-adjust)
+  (global-set-key (kbd "C--") #'global-text-scale-adjust))
+
+;; -- Evil Collection ----------------------------------------
+(use-package evil-collection
+  :after evil
+  :config
+  (evil-collection-init))
+
+;; -- Evil Nerd Commenter (gcc, gc, gcp, etc) ---------------
+(use-package evil-nerd-commenter
+  :after evil
+  :config
+  (evilnc-default-hotkeys nil t)
+  ;; Explicitly bind gc operator in normal and visual
+  (define-key evil-normal-state-map (kbd "gc") 'evilnc-comment-operator)
+  (define-key evil-visual-state-map (kbd "gc") 'evilnc-comment-operator))
+
+;; -- Evil Surround (ys, cs, ds) ----------------------------
+(use-package evil-surround
+  :after evil
+  :config
+  (global-evil-surround-mode 1))
+
+;; -- Session/Workspace Persistence -------------------------
+(require 'desktop)
+(desktop-save-mode 1)
+(setq desktop-auto-save-timeout 30)
+(setq desktop-restore-eager 5)
+
+;; 1. Tell the desktop engine how to save Eshell buffers cleanly without a file
+(defun my/desktop-save-eshell (desktop-dirname)
+  "Save the directory state of an eshell buffer to the desktop file safely."
+  (cons default-directory nil))
+
+;; 2. Define the restoration handler with proper argument matching
+(defun my/restore-eshell-handler (_buffer-file-name buffer-name misc)
+  "Safely reconstruct the eshell buffer using its saved directory context."
+  (let ((dir (car misc))
+        (buf (get-buffer-create buffer-name)))
+    (with-current-buffer buf
+      (when dir (setq default-directory dir))
+      (unless (derived-mode-p 'eshell-mode)
+        (eshell-mode)))
+    buf))
+
+;; 3. Register everything safely after the desktop library finishes loading
+(with-eval-after-load 'desktop
+  ;; Map the save and restore routines to eshell-mode
+  (add-to-list 'desktop-buffer-mode-handlers '(eshell-mode . my/restore-eshell-handler))
+  
+  ;; Modify the exclusion filter so it doesn't discard *eshell* buffers
+  (setq desktop-buffers-not-to-save 
+        "\\(^\\([^\\*[:nonascii:]]\\|\\*\\(scratch\\|Messages\\)\\*\\)$\\)"))
+
+;; 4. Hook the custom saver directly into every active Eshell buffer
+(add-hook 'eshell-mode-hook
+          (lambda ()
+            (setq-local desktop-save-buffer 'my/desktop-save-eshell)))
+
+;; -- Yank Flymake Error at Point ----------------------------
+(defun my/yank-flymake-error ()
+  "Copy the flymake diagnostic message at point to clipboard."
+  (interactive)
+  (if-let ((diag (car (flymake-diagnostics (point)))))
+      (let ((msg (flymake-diagnostic-text diag)))
+        (kill-new msg)
+        (message "Copied: %s" msg))
+    (message "No diagnostic at point.")))
+
+;; Yank last minibuffer message to clipboard
+(defun my/yank-last-message ()
+  "Copy the last message from the minibuffer to clipboard."
+  (interactive)
+  (let ((msg (current-message)))
+    (if msg
+        (progn (kill-new msg)
+               (message "Copied: %s" msg))
+      (message "No message to copy."))))
+
+(defun my/switch-to-buffer ()
+  "Switch to a buffer, filtering out special buffers and honoring tabspaces isolation."
+  (interactive)
+  (let ((completion-regexp-list (cons "^[^*]" completion-regexp-list)))
+    (if (bound-and-true-p tabspaces-mode)
+        (call-interactively #'tabspaces-switch-to-buffer)
+      (call-interactively #'switch-to-buffer))))
+
+(defun my/safely-close-workspace ()
+  "Prompt the user to explicitly confirm before destroying the active workspace."
+  (interactive)
+  (if (yes-or-no-p "Really delete current workspace? ")
+      (tabspaces-close-workspace)
+    (message "Workspace deletion canceled.")))
+
+(defun my/tabspaces-remove-buffer-preserve-window ()
+  "Remove the current buffer from the layout, switching to the next most recent user buffer."
+  (interactive)
+  (let* ((current-buf (current-buffer))
+         ;; Find the first buffer in the recent list that isn't the current one or a hidden buffer
+         (recent-buf (cl-find-if
+                      (lambda (buf)
+                        (let ((name (buffer-name buf)))
+                          (not (or (eq buf current-buf)
+                                   (string-prefix-p " " name)
+                                   (string-equal name "*scratch*")))))
+                      (buffer-list))))
+    ;; Switch windows first to prevent the split from breaking
+    (if recent-buf
+        (switch-to-buffer recent-buf)
+      (switch-to-buffer "*scratch*"))
+    ;; Now safely remove the old buffer from the tabspace layout
+    (tabspaces-remove-current-buffer current-buf)))
+
+;; -- General.el (Leader Key) --------------------------------
+(use-package general
+  :config
+  ;; Main leader
+  (general-create-definer doom-leader-keys
+    :keymaps '(normal insert visual emacs)
+    :prefix "SPC"
+    :global-prefix "C-SPC")
+
+  ;; Local leader for org-mode
+  (general-create-definer doom-local-leader-keys
+    :keymaps 'org-mode-map
+    :states '(normal visual insert emacs)
+    :prefix "SPC m"
+    :global-prefix "C-SPC m")
+
+  (doom-leader-keys
+    ;; Top Level
+    "SPC" '(find-file :which-key "Find file")
+    ":"   '(execute-extended-command :which-key "M-x")
+    "."   '(find-file :which-key "Find file (cwd)")
+    ","   '(my/switch-to-buffer :which-key "Switch buffer")
+    "/"   '(grep :which-key "Search project")
+    ";"   '(evilnc-comment-operator :which-key "Comment")
+
+    ;; Quit / Session
+    "q"   '(:ignore t :which-key "quit/session")
+    "qq"  '(save-buffers-kill-terminal :which-key "Quit Emacs")
+    "qs"  '(desktop-save-in-desktop-dir :which-key "Save session")
+    "ql"  '(desktop-read :which-key "Load session")
+    "qr"  '(restart-emacs :which-key "Restart Emacs")
+
+    ;; Files
+    "f"   '(:ignore t :which-key "files")
+    "ff"  '(find-file :which-key "Find file")
+    "fF"  '(project-find-file :which-key "Find file")
+    "f/"  '(project-find-ripgrep :which-key "Find text in project")
+    "fr"  '(recent-open-files :which-key "Recent files")
+    "fs"  '(save-buffer :which-key "Save file")
+    "fS"  '(write-file :which-key "Save file as")
+    "fd"  '(dired :which-key "Open dired")
+    "fP" '((lambda ()
+	    (interactive)
+	    (find-file
+	    (seq-find #'file-exists-p
+			'("~/.emacs.d/init.el"
+			"~/.config/emacs/init.el"
+			"~/.emacs"))))
+	:which-key "Open config")
+    "fD"  '((lambda () (interactive)
+          (if (buffer-file-name)
+              (when (yes-or-no-p (format "Delete %s? " (buffer-file-name)))
+                (delete-file (buffer-file-name))
+                (kill-buffer))
+            (message "Buffer is not visiting a file!")))
+        :which-key "Delete file")
+
+    ;; Buffers
+    "b"   '(:ignore t :which-key "buffers")
+    "bb"  '(my/switch-to-buffer :which-key "Switch buffer")
+    "bi"  '(ibuffer :which-key "List all buffers")
+    "bd" '(my/tabspaces-remove-buffer-preserve-window :which-key "Remove buffer, keep split")
+    "bc" '(my/tabspaces-remove-buffer-preserve-window :which-key "Remove buffer, keep split")
+    "bn"  '(next-buffer :which-key "Next buffer")
+    "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
+    "bp"  '(previous-buffer :which-key "Prev buffer")
+    "br"  '(revert-buffer :which-key "Revert buffer")
+
+    ;; Windows
+    "w"   '(:ignore t :which-key "windows")
+    "wv"  '(split-window-right :which-key "Split vertical")
+    "ws"  '(split-window-below :which-key "Split horizontal")
+    "wd"  '(delete-window :which-key "Delete window")
+    "wc"  '(delete-window :which-key "Delete window")
+    "ww"  '(other-window :which-key "Other window")
+    "wo"  '(delete-other-windows :which-key "Delete other windows")
+    "wh"  '(windmove-left :which-key "Window left")
+    "wl"  '(windmove-right :which-key "Window right")
+    "wk"  '(windmove-up :which-key "Window up")
+    "wj"  '(windmove-down :which-key "Window down")
+    "wm" '(toggle-frame-maximized :which-key "Maximize frame")
+    "wf" '(toggle-frame-fullscreen :which-key "Fullscreen")
+
+    ;; Search
+    "s"   '(:ignore t :which-key "search")
+    "ss"  '(occur :which-key "Search buffer")
+    "sg"  '(grep :which-key "Grep")
+    "si"  '(imenu :which-key "Jump to symbol")
+    "sr" '(query-replace :which-key "Find & replace buffer")
+    "sR" '(project-query-replace-regexp :which-key "Find & replace project")
+
+    ;; Help
+    "h"   '(:ignore t :which-key "help")
+    "hk"  '(describe-key :which-key "Describe key")
+    "hf"  '(describe-function :which-key "Describe function")
+    "hv"  '(describe-variable :which-key "Describe variable")
+    "hm"  '(describe-mode :which-key "Describe mode")
+    "ha"  '(apropos-command :which-key "Find commands")
+    "hw"  '(woman :which-key "Man page (woman)")
+    "hr"  '((lambda () (interactive) (load-file user-init-file)) :which-key "Reload config")
+    "hy" '(my/yank-last-message :which-key "Yank last message")
+    "fy" '((lambda () (interactive)
+          (let ((path (buffer-file-name)))
+            (if path
+                (progn (kill-new path)
+                       (message "Copied: %s" path))
+              (message "Buffer has no file!"))))
+        :which-key "Yank file path")
+    "fY" '((lambda () (interactive)
+	    (let ((path (buffer-file-name)))
+		(if path
+		    (let ((win-path (replace-regexp-in-string
+				    "/" "\\\\"
+				    (replace-regexp-in-string
+				    "^/mnt/\\([a-z]\\)/" "\\1:\\\\"
+				    path))))
+		    (kill-new win-path)
+		    (message "Copied: %s" win-path))
+		(message "Buffer has no file!"))))
+	    :which-key "Yank Windows path")
+
+    ;; Code
+    "c"   '(:ignore t :which-key "code")
+    "cc"  '(compile :which-key "Compile")
+    "cC"  '(recompile :which-key "Recompile")
+    "ck"  '(kill-compilation :which-key "Kill compilation")
+    "cw"  '(delete-trailing-whitespace :which-key "Delete whitespace")
+
+    ;; Navigation
+    "cd"  '(xref-find-definitions :which-key "Go to definition")
+    "cD"  '(xref-find-definitions-other-window :which-key "Definition other window")
+    "cr"  '(xref-find-references :which-key "Find references")
+    "cb"  '(xref-go-back :which-key "Jump back")
+    "cF"  '(xref-go-forward :which-key "Jump forward")
+
+    ;; Errors (flymake)
+    "ce"  '(:ignore t :which-key "errors")
+    "cen" '(flymake-goto-next-error :which-key "Next error")
+    "cep" '(flymake-goto-prev-error :which-key "Prev error")
+    "cel" '(flymake-show-buffer-diagnostics :which-key "List errors")
+
+    ;; Comments
+    "c;"  '(evilnc-comment-operator :which-key "Comment")
+
+    ;; LSP (eglot)
+    "l"   '(:ignore t :which-key "lsp")
+    "ll"  '(eglot :which-key "Start LSP")
+    "lr"  '(eglot-rename :which-key "Rename symbol")
+    "lf"  '(eglot-format :which-key "Format buffer")
+    "la"  '(eglot-code-actions :which-key "Code actions")
+    "lq"  '(eglot-shutdown :which-key "Stop LSP")
+    "ld"  '(flymake-show-buffer-diagnostics :which-key "Show diagnostics")
+    "ly"  '(my/yank-flymake-error :which-key "Yank error message")
+
+    ;; Org / Calendar
+    "ca"   '(:ignore t :which-key "agenda")
+    "caa" '(org-agenda :which-key "Org agenda")
+    "cal" '(calendar :which-key "Calendar")
+    "cat"  '((lambda () (interactive)
+           (insert (format-time-string "<%Y-%m-%d %a %H:%M>")))
+         :which-key "Insert timestamp")
+
+    ;; Global Search/Jump (SPC g)
+    "g"   '(:ignore t :which-key "search/jump")
+    "gw"  '(my/helix-gw :which-key "Jump to 3-char sequence")
+    "gd"  '(xref-find-definitions :which-key "Go to definition")
+    "gD"  '(xref-find-definitions-other-window :which-key "Definition other window")
+
+    ;; Git (magit)
+    "gi"   '(:ignore t :which-key "git")
+    "gig"  '(magit-status :which-key "Status")
+    "giB"  '(magit-blame :which-key "Blame")
+    "gil"  '(magit-log-current :which-key "Log")
+    "giL"  '(magit-log-all :which-key "Log all branches")
+    "gid"  '(magit-diff-working-tree :which-key "Diff working tree")
+    "giD"  '(magit-diff :which-key "Diff")
+    "gic"  '(magit-commit :which-key "Commit")
+    "giC"  '(magit-checkout :which-key "Checkout")
+    "gip"  '(magit-push-current :which-key "Push")
+    "giP"  '(magit-pull :which-key "Pull")
+    "gif"  '(magit-fetch :which-key "Fetch")
+    "gir"  '(magit-rebase :which-key "Rebase")
+    "git"  '(magit-tag :which-key "Tag")
+    "gib"  '(magit-branch :which-key "Branch")
+
+    ;; Terminals / Open
+    "o"   '(:ignore t :which-key "open")
+    "oe"  '(eshell :which-key "Open eshell")
+
+    ;; Toggles
+    "t"   '(:ignore t :which-key "toggles")
+    "tn"  '(display-line-numbers-mode :which-key "Line numbers")
+    "tw"  '(visual-line-mode :which-key "Word wrap")
+    "tt"  '(load-theme :which-key "Load theme")
+
+    ;; Notes
+    "n"   '(:ignore t :which-key "notes")
+    "nn"  '(org-capture :which-key "New note")
+    "nm"  '((lambda () (interactive) (org-capture nil "m")) :which-key "New meeting")
+    "nt"  '((lambda () (interactive) (org-capture nil "t")) :which-key "New todo")
+
+    ;; Workspaces (TAB)
+    "TAB"     '(:ignore t :which-key "workspaces")
+    "TAB TAB" '(tabspaces-switch-or-create-workspace :which-key "Switch workspace")
+    "TAB l"   '(tab-bar-switch-to-next-tab :which-key "Next workspace")
+    "TAB h"   '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
+    "TAB o"   '(tabspaces-open-or-create-project-and-workspace :which-key "New workspace")
+    "TAB d"   '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
+    "TAB r"   '(tab-bar-rename-tab :which-key "Rename workspace")
+
+    )
+
+  (doom-local-leader-keys
+    ;; Timestamps
+    "d"   '(:ignore t :which-key "dates")
+    "dd"  '(org-deadline :which-key "Set deadline")
+    "ds"  '(org-schedule :which-key "Schedule")
+    "dt"  '(org-time-stamp :which-key "Insert active timestamp")
+    "dT"  '(org-time-stamp-inactive :which-key "Insert inactive timestamp")
+
+    ;; Todo
+    "t"   '(org-todo :which-key "Cycle TODO state")
+
+    ;; Links
+    "l"   '(:ignore t :which-key "links")
+    "ll"  '(org-insert-link :which-key "Insert link")
+    "ls"  '(org-store-link :which-key "Store link")
+    "lo"  '(org-open-at-point :which-key "Open link")
+
+    ;; Clocking
+    "c"   '(:ignore t :which-key "clock")
+    "ci"  '(org-clock-in :which-key "Clock in")
+    "co"  '(org-clock-out :which-key "Clock out")
+    "cx"  '(org-clock-cancel :which-key "Cancel clock")
+    "cq"  '(org-clock-report :which-key "Clock report")
+
+    ;; Subtree
+    "s"   '(:ignore t :which-key "subtree")
+    "sr"  '(org-refile :which-key "Refile")
+    "sa"  '(org-archive-subtree :which-key "Archive")
+    "sn"  '(org-narrow-to-subtree :which-key "Narrow to subtree")
+    "sw"  '(widen :which-key "Widen")
+
+    ;; Insert
+    "i"   '(:ignore t :which-key "insert")
+    "ih"  '(org-insert-heading :which-key "Insert heading")
+    "is"  '(org-insert-subheading :which-key "Insert subheading")
+    "if"  '(org-footnote-new :which-key "Insert footnote")
+
+    ;; Tags/Properties
+    "p"   '(org-set-property :which-key "Set property")
+    "T"   '(org-set-tags-command :which-key "Set tags")
+
+    ;; Export
+    "e"   '(org-export-dispatch :which-key "Export")
+
+    ;; Babel
+    "b"   '(:ignore t :which-key "babel")
+    "bb"  '(org-babel-execute-src-block :which-key "Execute block")
+    "be"  '(org-edit-src-code :which-key "Edit src block")
+    "bt"  '(org-babel-tangle :which-key "Tangle")
+
+    ;; Priority
+    "P"   '(org-priority :which-key "Set priority")
+
+    ;; -- Tables (b) -----------------------------------------------
+    "b"    '(:ignore t :which-key "tables")
+    "b-"   '(org-table-insert-hline :which-key "Insert hline")
+    "bir"  '(org-table-insert-row :which-key "Insert row")
+    "bic"  '(org-table-insert-column :which-key "Insert column")
+    "bdr"  '(org-table-kill-row :which-key "Delete row")
+    "bdc"  '(org-table-delete-column :which-key "Delete column")
+    "ba"   '(org-table-align :which-key "Align table")
+    "bs"   '(org-table-sort-lines :which-key "Sort rows")
+    "bf"   '(org-table-edit-formulas :which-key "Edit formulas")
+    "be"   '(org-table-eval-formulas :which-key "Eval formulas")
+
+    ;; Checkbox
+    "bx"   '(org-toggle-checkbox :which-key "Toggle Checkbox")
+
+    ;; Misc
+    "'"   '(org-edit-src-code :which-key "Edit src block")
+    "RET" '(org-open-at-point :which-key "Follow link")))
+
+;; -- Which-key (Built-in 30.2) ------------------------------
+(use-package which-key
+  :ensure nil                       ; Tells Emacs not to download it from MELPA since it's built-in
+  :init
+  (setq which-key-idle-delay 0.2)   ; Set your preferred delay here (e.g., 0.0 for instant popup)
+  :config
+  (setq which-key-side-window-location 'bottom
+        which-key-popup-type 'side-window
+        which-key-side-window-max-height 0.25
+        which-key-separator " ? "
+        which-key-prefix-prefix "")
+  (which-key-mode 1))
+
+;; -- Catppuccin Theme ---------------------------------------
+(use-package catppuccin-theme
+  :config
+  (setq catppuccin-flavor 'macchiato)
+  (load-theme 'catppuccin t))
+
+;; -- Org Mode -----------------------------------------------
+(setq org-directory "~/org")
+
+(defun my/auto-insert-org-template ()
+  "Insert default Org header if new .org file is empty."
+  (when (and (buffer-file-name)
+             (string-match-p "\\.org\\'" (buffer-file-name))
+             (= (buffer-size) 0))
+    (insert "#+title: " (file-name-base (buffer-file-name)) "\n"
+            "#+author: " user-full-name "\n"
+            "#+date: " (format-time-string "<%Y-%m-%d %a %H:%M>") "\n\n")))
+
+(add-hook 'find-file-hook #'my/auto-insert-org-template)
+
+(add-hook 'org-mode-hook 'org-indent-mode)
+
+(with-eval-after-load 'org
+  ;; Built-in smart deletion for empty list bullets
+  (define-key org-mode-map (kbd "DEL") ; DEL is the Backspace key in Emacs
+    (lambda ()
+      (interactive)
+      (let ((line (buffer-substring-no-properties (line-beginning-position) (point))))
+        ;; If the line contains only an empty bullet (e.g., "- ", "1. ", or "+ ")
+        (if (string-match-p "^\\s-*\\(- \\|\\* \\|+\ \|[0-9]+\\.\\s-\\)\\s-*$" line)
+            (kill-line 0) ; Delete the entire bullet and indentation instantly
+          (backward-delete-char-untabify 1)))))) ; Otherwise, delete normally
+
+;; Enable Markdown export safely via use-package
+(use-package ox-gfm
+  :after org)
+
+;; -- Org Mode Header Sizes ----------------------------------
+(with-eval-after-load 'org
+  (set-face-attribute 'org-level-1 nil :height 1.4 :weight 'bold)
+  (set-face-attribute 'org-level-2 nil :height 1.25 :weight 'bold)
+  (set-face-attribute 'org-level-3 nil :height 1.15 :weight 'bold)
+  (set-face-attribute 'org-level-4 nil :height 1.05)
+  (set-face-attribute 'org-level-5 nil :height 1.0)
+  (set-face-attribute 'org-document-title nil :height 1.6 :weight 'bold))
+
+(use-package projectile
+  :config
+  (projectile-mode 1)
+  (setq projectile-project-search-path '("/mnt/c/work/projects/")))
+
+;; -- Arrow replacement via post-insert hook -----------------
+(defvar my/arrow-replacements
+  '(("-->"  . #x2192)
+    ("<--"  . #x2190)
+    ("==>"  . #x21D2)
+    ("<=="  . #x21D0)
+    ("<=>"  . #x27FA)
+    ("->>"  . #x21A0)
+    ("<<-"  . #x219E)
+    ("..."  . #x2026)))
+
+(defun my/replace-arrows ()
+  "Replace arrow sequences with Unicode characters."
+  (dolist (pair my/arrow-replacements)
+    (let ((arrow (car pair))
+          (char (cdr pair)))
+      (when (looking-back (regexp-quote arrow) (- (point) (length arrow)))
+        (delete-char (- (length arrow)))
+        (insert (string char))))))
+
+(add-hook 'post-self-insert-hook #'my/replace-arrows)
+
+(setq-default prettify-symbols-alist
+  '(("!="   . #x2260)
+    ("::"   . #x2237)))
+
+;; Enable per-buffer via hook instead of global mode
+(add-hook 'after-change-major-mode-hook #'prettify-symbols-mode)
+
+;; -- Org Capture Templates ----------------------------------
+(setq org-capture-templates
+    '(
+
+    ("m" "Meeting Note" entry
+    (file (lambda ()
+	    (let* ((title (read-string "Meeting title: "))
+		    (attendees (read-string "Attendees (comma separated): "))
+		    (slug (replace-regexp-in-string " " "-" (downcase title))))
+	    (set-register ?m title)
+	    (set-register ?a attendees)
+	    (expand-file-name
+		(concat (format-time-string "%Y-%m-%d-") slug ".org")
+		"~/org/meetings/"))))
+    "* %(get-register ?m)\nAttendees: %(get-register ?a)\n\n** Notes\n-  %?\n\n** Action Items\n%(mapconcat (lambda (p) (concat \"*** \" (string-trim p) \"\\n-  \")) (split-string (get-register ?a) \",\") \"\\n\")\n"
+    :empty-lines 1)
+
+    ("t" "Todo" entry
+    (file+headline "~/org/todo.org" "Tasks")
+    "* TODO %^{Task}\nSCHEDULED: %^t DEADLINE: %^t\n\n-  %?"
+    :empty-lines 1)
+
+    ("n" "Quick Note" entry
+     (file+datetree "~/org/notes.org")
+     "* %^{Title}\n%T\n\n%?\n"
+     :empty-lines 1)))
+
+;; Tell org-agenda which files to scan
+(setq org-agenda-files '("~/org/todo.org"
+                          "~/org/meetings"
+                          "~/org/notes.org"))
+
+;; -- Evil Org (proper Doom-like org keybinds) ---------------
+(use-package evil-org
+  :after (evil org)
+  :hook (org-mode . evil-org-mode)
+  :config
+  (evil-org-set-key-theme '(navigation insert textobjects additional calendar return)))
+
+;; -- Native Comp Warnings (suppress) -----------------------
+(setq native-comp-async-report-warnings-errors nil)
+
+;; -- Centered Cursor ----------------------------------------
+(use-package centered-cursor-mode
+  :config
+  (global-centered-cursor-mode 1)
+  (add-hook 'term-mode-hook (lambda () (centered-cursor-mode -1)))
+  (add-hook 'eshell-mode-hook (lambda () (centered-cursor-mode -1))))
+
+;; --- Two-Tier Workspace/Buffer Tabs ---
+(use-package tab-bar
+  :ensure nil
+  :init
+  (tab-bar-mode 1)
+  :custom
+  ;; Ensure each top-level tab tracks its own isolated window configuration
+  (tab-bar-new-tab-to 'current-tab))
+
+(use-package tabspaces
+  :init
+  (tabspaces-mode 1)
+  :custom
+  ;; Core isolation settings
+  (tabspaces-use-filtered-buffers-as-default t)
+  (tabspaces-default-tab "Home")
+  (tabspaces-remove-to-default t)
+  ;; Tells project.el to use tabspaces for workspace isolation
+  (tabspaces-initialize-project-with-tabs t)
+  ;; Filter function for commands like switch-to-buffer
+  (tabspaces-buffer-index-function #'tabspaces-buffer-index))
+
+;; Prevent Emacs from treating side-window parents as un-splittable blocks
+(setq window-combination-resize t)
+
+;; --- Prevent Side Window Protection Crashes ---
+(defun my/disable-side-window-parameters (frame)
+  "Temporarily strip side window parameters during layout switches."
+  (window-skip-parameters (frame-selected-window frame)))
+
+;; Tell the tab-bar system to suspend side-window locking rules when shifting layouts
+(setq tab-bar-tab-to-frame-config-function #'my/disable-side-window-parameters)
+
+;; Ensure side-windows don't persist rigid splits across global tab adjustments
+(setq window-combination-resize t)
+
+;; -- Vertico (vertical completion UI) ----------------------
+(use-package vertico
+  :init
+  (vertico-mode 1)
+  (setq vertico-count 15))        ; show 15 candidates at once
+
+;; -- Orderless (fuzzy/flex matching) -----------------------
+(use-package orderless
+  :config
+  (setq completion-styles '(orderless basic)
+        completion-category-overrides
+        '((file (styles basic partial-completion)))))
+
+;; -- Marginalia (annotations on candidates) ----------------
+(use-package marginalia
+  :init
+  (marginalia-mode 1))
+
+;; -- Avy Jumper (Helix gw Emulator) ------------------------
+(use-package avy
+  :config
+  (setq avy-keys '(?a ?s ?d ?f ?j ?k ?l ?e ?r ?u ?i ?o ?w ?v ?c ?m))
+  (defun my/helix-gw ()
+    "Jump to any visible word instantly, mimicking Helix's 'gw' command."
+    (interactive)
+    ;; Force avy to label all words matching a word-boundary regex instantly
+    (let ((avy-all-windows t))
+      (avy-with my/helix-gw
+        (avy-process (avy--regex-candidates "\\b[a-zA-Z0-9_]"))))))
+
+;; -- TCL Support --------------------------------------------
+(use-package tcl
+  :ensure nil
+  :mode ("\\.tcl\\'" . tcl-mode)
+  :config
+  (setq tcl-indent-level 4))
+
+;; -- Verilog / SystemVerilog Support -------------------------
+(use-package verilog-mode
+  :ensure nil
+  :mode (("\\.v\\'" . verilog-mode)
+         ("\\.sv\\'" . verilog-mode))
+
+  :config
+  ;; -- Verilog Mode -------------------------------------------
+  (setq verilog-linter "/usr/local/bin/verible-verilog-lint")
+
+  ;; Customizations to mimic Doom's clean formatting
+  (setq verilog-indent-level             4
+        verilog-indent-level-module      4
+        verilog-indent-level-declaration 4
+        verilog-indent-level-behavioral  4
+        verilog-auto-endcomments         nil)) ; Disables noisy "endmodule // name" comments
+
+(advice-add 'verilog-auto :after
+            (lambda (&rest _) (untabify (point-min) (point-max))))
+
+;; Define custom faces
+(defface verilog-parameter-face
+  '((t :foreground "#cee49f" :weight bold))
+  "Face for Verilog ALL_CAPS parameters/constants.")
+
+(defface verilog-number-face
+  '((t :foreground "#f5a97f"))
+  "Face for Verilog numeric literals.")
+
+;; Apply via hook with prepend to override verilog-mode defaults
+(defun my/verilog-font-lock-setup ()
+  (font-lock-add-keywords nil
+    '(("\\b\\([A-Z][A-Z0-9_]+\\)\\b"
+       0 'verilog-parameter-face prepend)
+      ("\\b\\([0-9]+\\('[bdh][0-9a-fA-FxXzZ_]+\\)?\\)\\b"
+       0 'verilog-number-face prepend))
+    'prepend))
+
+(add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup)
+
+;; -- Eglot + Verible (SystemVerilog LSP) -------------------
+(use-package eglot
+  :hook (verilog-mode . eglot-ensure)
+  :config
+  (add-to-list 'eglot-server-programs
+               `((verilog-mode) .
+                 ,(lambda (interactive)
+                    (let* ((proj (project-current))
+                           (root (if proj (project-root proj) default-directory)))
+                      (list "verible-verilog-ls"
+                            "--file_list_path"
+                            (let ((f (make-temp-file "verible-files")))
+                              (with-temp-file f
+                                (insert (mapconcat #'identity
+                                                   (directory-files-recursively root "\\.s?v$")
+                                                   "\n")))
+                              f))))))
+  (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
+
+;; Make SPC leader work in magit buffers
+(with-eval-after-load 'magit
+  (evil-define-key 'normal magit-mode-map
+    (kbd "H") 'my/next-buffer
+    (kbd "L") 'my/prev-buffer)
+  (evil-define-key 'normal magit-status-mode-map
+    (kbd "H") 'my/next-buffer
+    (kbd "L") 'my/prev-buffer)
+  (evil-define-key 'normal magit-log-mode-map
+    (kbd "H") 'my/next-buffer
+    (kbd "L") 'my/prev-buffer)
+  (evil-define-key 'normal magit-diff-mode-map
+    (kbd "H") 'my/next-buffer
+    (kbd "L") 'my/prev-buffer))
+
+(with-eval-after-load 'magit (dolist (map (list magit-mode-map
+                     magit-status-mode-map
+                     magit-log-mode-map
+                     magit-diff-mode-map
+                     magit-refs-mode-map
+                     magit-revision-mode-map))
+    (define-key map (kbd "SPC") nil))
+  
+  ;; Also unbind from evil-collection's magit bindings
+  (evil-define-key '(normal visual motion) magit-mode-map
+    (kbd "SPC") nil))
+
+;; These give the most speed with least feature loss
+(setq vc-handled-backends nil)          ; safe, magit replaces this anyway
+(setq magit-diff-refine-hunk nil)       ; minor visual loss
+(setq magit-auto-revert-mode nil)       ; press SPC b r manually after operations
+
+;; Go back to system git
+(setq magit-git-executable "git")
+
+;; -- Popup Bottom Windows (Doom-style) ---------------------
+
+(add-to-list 'display-buffer-alist
+  '("\\*scratch\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 0)
+    (window-height . 0.2)))
+
+(add-to-list 'display-buffer-alist
+  '("\\*Async Shell Command\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 1)
+    (window-height . 0.2)))
+
+(add-to-list 'display-buffer-alist
+  '("\\*eshell\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 2)
+    (window-height . 0.2)))
+
+;; Make j/k move by visual lines not logical lines
+(with-eval-after-load 'evil
+  (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
+  (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
+  (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
+  (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
+  (evil-ex-define-cmd "bd" #'tabspaces-remove-current-buffer)
+  (evil-ex-define-cmd "bc" #'tabspaces-remove-current-buffer))
+
+;; -- Rainbow Delimiters -------------------------------------
+(use-package rainbow-delimiters
+  :hook (prog-mode . rainbow-delimiters-mode)
+  :config
+  ;; Catppuccin Macchiato colors for each depth
+  (set-face-foreground 'rainbow-delimiters-depth-1-face  "#8aadf4") ; blue
+  (set-face-foreground 'rainbow-delimiters-depth-2-face  "#a6da95") ; green
+  (set-face-foreground 'rainbow-delimiters-depth-3-face  "#eed49f") ; yellow
+  (set-face-foreground 'rainbow-delimiters-depth-4-face  "#f5a97f") ; peach
+  (set-face-foreground 'rainbow-delimiters-depth-5-face  "#c6a0f6") ; mauve
+  (set-face-foreground 'rainbow-delimiters-depth-6-face  "#8bd5ca") ; teal
+  (set-face-foreground 'rainbow-delimiters-depth-7-face  "#ed8796") ; red
+  (set-face-foreground 'rainbow-delimiters-depth-8-face  "#f0c6c6") ; flamingo
+  (set-face-foreground 'rainbow-delimiters-depth-9-face  "#91d7e3") ; sky
+  (set-face-foreground 'rainbow-delimiters-unmatched-face "#ed8796")) ; red for unmatched
+
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages
+   '(activities avy catppuccin-theme centered-cursor-mode evil-collection
+		evil-nerd-commenter evil-org evil-surround general
+		marginalia orderless ox-gfm projectile
+		rainbow-delimiters tabspaces undo-history verilog-mode
+		vertico)))
+
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
+
