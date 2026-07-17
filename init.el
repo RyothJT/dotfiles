@@ -180,25 +180,6 @@
       (tabspaces-close-workspace)
     (message "Workspace deletion canceled.")))
 
-(defun my/tabspaces-remove-buffer-preserve-window ()
-  "Remove the current buffer from the layout, switching to the next most recent user buffer."
-  (interactive)
-  (let* ((current-buf (current-buffer))
-         ;; Find the first buffer in the recent list that isn't the current one or a hidden buffer
-         (recent-buf (cl-find-if
-                      (lambda (buf)
-                        (let ((name (buffer-name buf)))
-                          (not (or (eq buf current-buf)
-                                   (string-prefix-p " " name)
-                                   (string-equal name "*scratch*")))))
-                      (buffer-list))))
-    ;; Switch windows first to prevent the split from breaking
-    (if recent-buf
-        (switch-to-buffer recent-buf)
-      (switch-to-buffer "*scratch*"))
-    ;; Now safely remove the old buffer from the tabspace layout
-    (tabspaces-remove-current-buffer current-buf)))
-
 ;; -- General.el (Leader Key) --------------------------------
 (use-package general
   :config
@@ -260,8 +241,8 @@
     "b"   '(:ignore t :which-key "buffers")
     "bb"  '(my/switch-to-buffer :which-key "Switch buffer")
     "bi"  '(ibuffer :which-key "List all buffers")
-    "bd" '(my/tabspaces-remove-buffer-preserve-window :which-key "Remove buffer, keep split")
-    "bc" '(my/tabspaces-remove-buffer-preserve-window :which-key "Remove buffer, keep split")
+    "bd"  '(tabspaces-remove-current-buffer :which-key "Remove buffer, keep split")
+    "bc"  '(tabspaces-remove-current-buffer :which-key "Remove buffer, keep split")
     "bn"  '(next-buffer :which-key "Next buffer")
     "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
     "bp"  '(previous-buffer :which-key "Prev buffer")
@@ -271,8 +252,6 @@
     "w"   '(:ignore t :which-key "windows")
     "wv"  '(split-window-right :which-key "Split vertical")
     "ws"  '(split-window-below :which-key "Split horizontal")
-    "wd"  '(delete-window :which-key "Delete window")
-    "wc"  '(delete-window :which-key "Delete window")
     "ww"  '(other-window :which-key "Other window")
     "wo"  '(delete-other-windows :which-key "Delete other windows")
     "wh"  '(windmove-left :which-key "Window left")
@@ -281,6 +260,15 @@
     "wj"  '(windmove-down :which-key "Window down")
     "wm" '(toggle-frame-maximized :which-key "Maximize frame")
     "wf" '(toggle-frame-fullscreen :which-key "Fullscreen")
+
+    ;; Window Close/Delete Sub-menu (SPC w c)
+    "wc"  '(:ignore t :which-key "close/delete")
+    "wcc" '(delete-window :which-key "Delete current window")
+    "wco" '(delete-other-windows :which-key "Delete other windows (maximize)")
+    "wch" '(windmove-delete-left :which-key "Delete window left")
+    "wcj" '(windmove-delete-down :which-key "Delete window below")
+    "wck" '(windmove-delete-up :which-key "Delete window above")
+    "wcl" '(windmove-delete-right :which-key "Delete window right")
 
     ;; Search
     "s"   '(:ignore t :which-key "search")
@@ -674,6 +662,9 @@
         completion-category-overrides
         '((file (styles basic partial-completion)))))
 
+;; -- Magit -------------------------------------------------
+(use-package magit)
+
 ;; -- Marginalia (annotations on candidates) ----------------
 (use-package marginalia
   :init
@@ -848,7 +839,7 @@
  '(package-selected-packages
    '(activities avy catppuccin-theme centered-cursor-mode evil-collection
 		evil-nerd-commenter evil-org evil-surround general
-		marginalia orderless ox-gfm projectile
+		magit marginalia orderless ox-gfm projectile
 		rainbow-delimiters tabspaces undo-history verilog-mode
 		vertico)))
 
