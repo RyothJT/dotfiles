@@ -377,12 +377,6 @@
     "oe"  '(eshell :which-key "Open eshell")
     "oE"  '(my/project-eshell :which-key "Open new eshell")
 
-    ;; Toggles
-    "t"   '(:ignore t :which-key "toggles")
-    "tn"  '(display-line-numbers-mode :which-key "Line numbers")
-    "tw"  '(visual-line-mode :which-key "Word wrap")
-    "tt"  '(load-theme :which-key "Load theme")
-
     ;; Notes
     "n"  '(org-capture :which-key "New note")
 
@@ -442,7 +436,7 @@
     "e"   '(org-export-dispatch :which-key "Export")
 
     ;; Babel
-    "b"   '(:ignore t :which-key "babel")
+    "b"   '(:ignore t :which-key "tables/babel")
     "bb"  '(org-babel-execute-src-block :which-key "Execute block")
     "be"  '(org-edit-src-code :which-key "Edit src block")
     "bt"  '(org-babel-tangle :which-key "Tangle")
@@ -451,7 +445,6 @@
     "P"   '(org-priority :which-key "Set priority")
 
     ;; -- Tables (b) -----------------------------------------------
-    "b"    '(:ignore t :which-key "tables")
     "b-"   '(org-table-insert-hline :which-key "Insert hline")
     "bir"  '(org-table-insert-row :which-key "Insert row")
     "bic"  '(org-table-insert-column :which-key "Insert column")
