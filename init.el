@@ -374,7 +374,8 @@
 
     ;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
-    "oe"  '(my/project-eshell :which-key "Open eshell")
+    "oe"  '(eshell :which-key "Open eshell")
+    "oE"  '(my/project-eshell :which-key "Open new eshell")
 
     ;; Toggles
     "t"   '(:ignore t :which-key "toggles")
@@ -573,7 +574,7 @@
     :tree-type week
     :clock-in t
     :clock-resume t
-    :empty-lines 0)
+    :empty-line Soms 0)
 
     ("t" "Todo" entry
     (file+headline "~/org/todo.org" "Tasks")
