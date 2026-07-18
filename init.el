@@ -48,20 +48,22 @@
 
 ;; -- Skip special buffers with H/L -------------------------
 (defun my/next-buffer ()
-  "Go to next buffer, skipping special buffers."
+  "Go to next buffer, skipping special buffers and honoring frame isolation."
   (interactive)
   (let ((start (current-buffer)))
     (next-buffer)
-    (while (and (string-match-p "^\\*" (buffer-name))
+    (while (and (or (string-match-p "^\\*" (buffer-name))
+                    (not (beframe-buffer-p (current-buffer))))
                 (not (eq (current-buffer) start)))
       (next-buffer))))
 
 (defun my/prev-buffer ()
-  "Go to previous buffer, skipping special buffers."
+  "Go to previous buffer, skipping special buffers and honoring frame isolation."
   (interactive)
   (let ((start (current-buffer)))
     (previous-buffer)
-    (while (and (string-match-p "^\\*" (buffer-name))
+    (while (and (or (string-match-p "^\\*" (buffer-name))
+                    (not (beframe-buffer-p (current-buffer))))
                 (not (eq (current-buffer) start)))
       (previous-buffer))))
 
@@ -146,14 +148,24 @@
           (lambda ()
             (setq-local desktop-save-buffer 'my/desktop-save-eshell)))
 
-;; 5. Helper function for smart project eshell spawning
+(defun my/frame-isolated-eshell (&optional arg)
+  "Open or create an Eshell buffer unique to the current frame.
+With a prefix ARG, prompts for a session name."
+  (interactive "P")
+  (let* ((frame-id (frame-parameter nil 'window-id))
+         (buf-name (format "*eshell-%s*" frame-id)))
+    (cond
+     (arg (call-interactively #'eshell))
+     (t (eshell buf-name)))))
+
+;; Update your helper function for project eshell spawning as well
 (defun my/project-eshell ()
-  "Open Eshell in the current project root, or current directory if not in a project."
+  "Open a frame-isolated Eshell in the current project root."
   (interactive)
   (let ((default-directory (if (fboundp 'projectile-project-root)
                                (or (ignore-errors (projectile-project-root)) default-directory)
                              default-directory)))
-    (eshell t)))
+    (my/frame-isolated-eshell)))
 
 ;; -- Yank Flymake Error at Point ----------------------------
 (defun my/yank-flymake-error ()
@@ -176,19 +188,17 @@
       (message "No message to copy."))))
 
 (defun my/switch-to-buffer ()
-  "Switch to a buffer, filtering out special buffers and honoring tabspaces isolation."
+  "Switch to a buffer, filtering out special buffers."
   (interactive)
   (let ((completion-regexp-list (cons "^[^*]" completion-regexp-list)))
-    (if (bound-and-true-p tabspaces-mode)
-        (call-interactively #'tabspaces-switch-to-buffer)
-      (call-interactively #'switch-to-buffer))))
+    (call-interactively #'switch-to-buffer)))
 
 (defun my/safely-close-workspace ()
   "Prompt the user to explicitly confirm before destroying the active workspace."
   (interactive)
-  (if (yes-or-no-p "Really delete current workspace? ")
-      (tabspaces-close-workspace)
-    (message "Workspace deletion canceled.")))
+  (if (yes-or-no-p "Really delete current tab? ")
+      (tab-bar-close-tab)
+    (message "Tab deletion canceled.")))
 
 ;; -- General.el (Leader Key) --------------------------------
 (use-package general
@@ -251,8 +261,8 @@
     "b"   '(:ignore t :which-key "buffers")
     "bb"  '(my/switch-to-buffer :which-key "Switch buffer")
     "bi"  '(ibuffer :which-key "List all buffers")
-    "bd"  '(tabspaces-remove-current-buffer :which-key "Remove buffer, keep split")
-    "bc"  '(tabspaces-remove-current-buffer :which-key "Remove buffer, keep split")
+    "bd"  '(kill-current-buffer :which-key "Remove buffer, keep split")
+    "bc"  '(kill-current-buffer :which-key "Remove buffer, keep split")
     "bn"  '(next-buffer :which-key "Next buffer")
     "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
     "bp"  '(previous-buffer :which-key "Prev buffer")
@@ -384,7 +394,7 @@
 
     ;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
-    "oe"  '(eshell :which-key "Open eshell")
+    "oe"  '(my/frame-isolated-eshell :which-key "Open eshell")
     "oE"  '(my/project-eshell :which-key "Open new eshell")
 
     ;; Notes
@@ -392,12 +402,12 @@
 
     ;; Workspaces (TAB)
     "TAB"     '(:ignore t :which-key "workspaces")
-    "TAB TAB" '(tabspaces-switch-or-create-workspace :which-key "Switch workspace")
-    "TAB l"   '(tab-bar-switch-to-next-tab :which-key "Next workspace")
-    "TAB h"   '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
-    "TAB o"   '(tabspaces-open-or-create-project-and-workspace :which-key "New workspace")
-    "TAB d"   '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
-    "TAB r"   '(tab-bar-rename-tab :which-key "Rename workspace")
+    "TAB TAB"  '(tab-bar-switch-to-tab :which-key "Switch workspace")
+    "TAB l"    '(tab-bar-switch-to-next-tab :which-key "Next workspace")
+    "TAB h"    '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
+    "TAB o"    '(tab-bar-new-tab :which-key "New workspace")
+    "TAB d"    '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
+    "TAB r"    '(tab-bar-rename-tab :which-key "Rename workspace")
 
     )
 
@@ -491,6 +501,14 @@
   :config
   (setq catppuccin-flavor 'macchiato)
   (load-theme 'catppuccin t))
+
+;; -- Frame isolation ----------------------------------------
+(use-package beframe
+  :init
+  (beframe-mode 1)
+  :custom
+  ;; Automatically un-isolate global/scratch buffers so you can always see them
+  (beframe-global-buffers '("*scratch*" "*Messages*" "*Help*")))
 
 ;; -- tldr ---------------------------------------------------
 (use-package tldr)
@@ -653,20 +671,7 @@
   (tab-bar-mode 1)
   :custom
   ;; Ensure each top-level tab tracks its own isolated window configuration
-  (tab-bar-new-tab-to 'current-tab))
-
-(use-package tabspaces
-  :init
-  (tabspaces-mode 1)
-  :custom
-  ;; Core isolation settings
-  (tabspaces-use-filtered-buffers-as-default t)
-  (tabspaces-default-tab "Home")
-  (tabspaces-remove-to-default t)
-  ;; Tells project.el to use tabspaces for workspace isolation
-  (tabspaces-initialize-project-with-tabs t)
-  ;; Filter function for commands like switch-to-buffer
-  (tabspaces-buffer-index-function #'tabspaces-buffer-index))
+  (tab-bar-new-tab-to 'rightmost))
 
 ;; Prevent Emacs from treating side-window parents as un-splittable blocks
 (setq window-combination-resize t)
@@ -831,8 +836,8 @@
   (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
   (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
   (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
-  (evil-ex-define-cmd "bd" #'tabspaces-remove-current-buffer)
-  (evil-ex-define-cmd "bc" #'tabspaces-remove-current-buffer))
+  (evil-ex-define-cmd "bd" #'kill-current-buffer)
+  (evil-ex-define-cmd "bc" #'kill-current-buffer))
 
 ;; -- Rainbow Delimiters -------------------------------------
 (use-package rainbow-delimiters
@@ -856,11 +861,11 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(activities avy catppuccin-theme centered-cursor-mode evil-collection
-		evil-nerd-commenter evil-org evil-surround general
-		magit marginalia orderless org-superstar ox-gfm
-		projectile rainbow-delimiters tabspaces tldr
-		undo-history verilog-mode vertico)))
+   '(activities avy beframe catppuccin-theme centered-cursor-mode
+		evil-collection evil-nerd-commenter evil-org
+		evil-surround general magit marginalia orderless
+		org-superstar ox-gfm projectile rainbow-delimiters
+		tldr undo-history verilog-mode vertico)))
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
