@@ -48,22 +48,28 @@
 
 ;; -- Skip special buffers with H/L -------------------------
 (defun my/next-buffer ()
-  "Go to next buffer, skipping special buffers and honoring frame isolation."
+  "Go to next buffer, strictly honoring frame isolation and ignoring internal ones."
   (interactive)
-  (let ((start (current-buffer)))
+  (let* ((start (current-buffer))
+         (frame (selected-frame))
+         ;; Get the exact, current list of buffers assigned to this frame
+         (frame-buffers (frame-parameter frame 'buffer-list)))
     (next-buffer)
     (while (and (or (string-match-p "^\\*" (buffer-name))
-                    (not (beframe-buffer-p (current-buffer))))
+                    (not (memq (current-buffer) frame-buffers)))
                 (not (eq (current-buffer) start)))
       (next-buffer))))
 
 (defun my/prev-buffer ()
-  "Go to previous buffer, skipping special buffers and honoring frame isolation."
+  "Go to previous buffer, strictly honoring frame isolation and ignoring internal ones."
   (interactive)
-  (let ((start (current-buffer)))
+  (let* ((start (current-buffer))
+         (frame (selected-frame))
+         ;; Get the exact, current list of buffers assigned to this frame
+         (frame-buffers (frame-parameter frame 'buffer-list)))
     (previous-buffer)
     (while (and (or (string-match-p "^\\*" (buffer-name))
-                    (not (beframe-buffer-p (current-buffer))))
+                    (not (memq (current-buffer) frame-buffers)))
                 (not (eq (current-buffer) start)))
       (previous-buffer))))
 
@@ -167,6 +173,35 @@ With a prefix ARG, prompts for a session name."
                              default-directory)))
     (my/frame-isolated-eshell)))
 
+(defun my/beframe-unassume-current-buffer ()
+  "Unassume the current buffer from the frame and switch to another frame buffer."
+  (interactive)
+  (let* ((buf (current-buffer))
+         (frame (selected-frame))
+         (remaining (beframe-buffer-list frame)))
+    (if (> (length remaining) 1)
+        (let ((chosen nil))
+          ;; 1. Directly remove the buffer from the frame's local parameter list
+          (set-frame-parameter 
+           frame 'buffer-list 
+           (delq buf (frame-parameter frame 'buffer-list)))
+          ;; 2. Find the next valid buffer that doesn't start with "*"
+          (dolist (b remaining)
+            (when (and (not chosen)
+                       (not (eq b buf))
+                       (not (string-match-p "^\\*" (buffer-name b))))
+              (setq chosen b)))
+          ;; 3. Switch to the new candidate or fallback safely
+          (if chosen
+              (switch-to-buffer chosen)
+            (let ((next-fallback (car (delq buf remaining))))
+              (if next-fallback
+                  (switch-to-buffer next-fallback)
+                (switch-to-buffer "*scratch*")))))
+      ;; Fallback if it is the last buffer in the frame
+      (unless (string-equal (buffer-name buf) "*scratch*")
+        (switch-to-buffer "*scratch*")))))
+
 ;; -- Yank Flymake Error at Point ----------------------------
 (defun my/yank-flymake-error ()
   "Copy the flymake diagnostic message at point to clipboard."
@@ -261,8 +296,8 @@ With a prefix ARG, prompts for a session name."
     "b"   '(:ignore t :which-key "buffers")
     "bb"  '(my/switch-to-buffer :which-key "Switch buffer")
     "bi"  '(ibuffer :which-key "List all buffers")
-    "bd"  '(kill-current-buffer :which-key "Remove buffer, keep split")
-    "bc"  '(kill-current-buffer :which-key "Remove buffer, keep split")
+    "bd"  '(my/beframe-unassume-current-buffer :which-key "Remove buffer from frame")
+    "bc"  '(my/beframe-unassume-current-buffer :which-key "Remove buffer from frame")
     "bn"  '(next-buffer :which-key "Next buffer")
     "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
     "bp"  '(previous-buffer :which-key "Prev buffer")
@@ -500,9 +535,11 @@ With a prefix ARG, prompts for a session name."
 (use-package catppuccin-theme
   :config
   (setq catppuccin-flavor 'macchiato)
-  (load-theme 'catppuccin t))
+  (load-theme 'catppuccin t)
 
 ;; -- Frame isolation ----------------------------------------
+
+
 (use-package beframe
   :init
   (beframe-mode 1)
@@ -670,8 +707,33 @@ With a prefix ARG, prompts for a session name."
   :init
   (tab-bar-mode 1)
   :custom
-  ;; Ensure each top-level tab tracks its own isolated window configuration
-  (tab-bar-new-tab-to 'rightmost))
+  (tab-bar-new-tab-to 'rightmost)
+  :config
+  ;; --- Enhance Active Tab Visibility ---
+  (with-eval-after-load 'catppuccin-theme
+    (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
+          (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
+          (bg-inactive  "#24273a")  ; Macchiato Surface
+          (fg-inactive  "#cad3f5")) ; Macchiato Text
+
+      ;; Styling for the currently active tab
+      (set-face-attribute 'tab-bar-tab nil
+                          :background bg-active
+                          :foreground fg-active
+                          :weight 'bold
+                          :box `(:line-width (6 . 3) :color ,bg-active))
+
+      ;; Styling for all inactive tabs
+      (set-face-attribute 'tab-bar-tab-inactive nil
+                          :background bg-inactive
+                          :foreground fg-inactive
+                          :weight 'normal
+                          :box `(:line-width (6 . 3) :color ,bg-inactive))
+
+      ;; Styling for the empty remaining space behind the tabs
+      (set-face-attribute 'tab-bar nil
+                          :background "#181926" ; Darker crust color
+                          :foreground fg-inactive))))
 
 ;; Prevent Emacs from treating side-window parents as un-splittable blocks
 (setq window-combination-resize t)
