@@ -908,8 +908,8 @@ If the buffer is not assumed by any other open frame, it is killed globally."
   (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
   (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
   (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
-  (evil-ex-define-cmd "bd" #'kill-current-buffer)
-  (evil-ex-define-cmd "bc" #'kill-current-buffer))
+  (evil-ex-define-cmd "bd" #'my/beframe-unassume-current-buffer)
+  (evil-ex-define-cmd "bc" #'my/beframe-unassume-current-buffer))
 
 ;; -- Rainbow Delimiters -------------------------------------
 (use-package rainbow-delimiters
