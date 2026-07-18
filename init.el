@@ -174,14 +174,15 @@ With a prefix ARG, prompts for a session name."
     (my/frame-isolated-eshell)))
 
 (defun my/beframe-unassume-current-buffer ()
-  "Unassume the current buffer from the frame and switch to another frame buffer."
+  "Unassume the current buffer from the frame and switch to another frame buffer.
+If the buffer is not assumed by any other open frame, it is killed globally."
   (interactive)
   (let* ((buf (current-buffer))
          (frame (selected-frame))
          (remaining (beframe-buffer-list frame)))
     (if (> (length remaining) 1)
         (let ((chosen nil))
-          ;; 1. Directly remove the buffer from the frame's local parameter list
+          ;; 1. Directly remove the buffer from the current frame's local list
           (set-frame-parameter 
            frame 'buffer-list 
            (delq buf (frame-parameter frame 'buffer-list)))
@@ -197,10 +198,19 @@ With a prefix ARG, prompts for a session name."
             (let ((next-fallback (car (delq buf remaining))))
               (if next-fallback
                   (switch-to-buffer next-fallback)
-                (switch-to-buffer "*scratch*")))))
+                (switch-to-buffer "*scratch*"))))
+          ;; 4. If no other frame assumes this buffer, kill it globally
+          (let ((assumed-elsewhere nil))
+            (dolist (f (frame-list))
+              (unless (eq f frame)
+                (when (memq buf (frame-parameter f 'buffer-list))
+                  (setq assumed-elsewhere t))))
+            (unless assumed-elsewhere
+              (kill-buffer buf))))
       ;; Fallback if it is the last buffer in the frame
       (unless (string-equal (buffer-name buf) "*scratch*")
-        (switch-to-buffer "*scratch*")))))
+        (switch-to-buffer "*scratch*")
+        (kill-buffer buf)))))
 
 ;; -- Yank Flymake Error at Point ----------------------------
 (defun my/yank-flymake-error ()
