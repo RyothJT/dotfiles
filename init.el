@@ -383,10 +383,7 @@
     "tt"  '(load-theme :which-key "Load theme")
 
     ;; Notes
-    "n"   '(:ignore t :which-key "notes")
-    "nn"  '(org-capture :which-key "New note")
-    "nm"  '((lambda () (interactive) (org-capture nil "m")) :which-key "New meeting")
-    "nt"  '((lambda () (interactive) (org-capture nil "t")) :which-key "New todo")
+    "n"  '(org-capture :which-key "New note")
 
     ;; Workspaces (TAB)
     "TAB"     '(:ignore t :which-key "workspaces")
@@ -503,8 +500,11 @@
             "#+date: " (format-time-string "<%Y-%m-%d %a %H:%M>") "\n\n")))
 
 (add-hook 'find-file-hook #'my/auto-insert-org-template)
-
 (add-hook 'org-mode-hook 'org-indent-mode)
+
+(setq org-log-done 'time)
+(setq org-return-follows-link t)
+(setq org-hide-emphasis-markers t)
 
 (with-eval-after-load 'org
   ;; Built-in smart deletion for empty list bullets
@@ -517,6 +517,8 @@
             (kill-line 0) ; Delete the entire bullet and indentation instantly
           (backward-delete-char-untabify 1)))))) ; Otherwise, delete normally
 
+
+
 ;; Enable Markdown export safely via use-package
 (use-package ox-gfm
   :after org)
@@ -524,9 +526,9 @@
 ;; -- Org Mode Header Sizes ----------------------------------
 (with-eval-after-load 'org
   (set-face-attribute 'org-level-1 nil :height 1.4 :weight 'bold)
-  (set-face-attribute 'org-level-2 nil :height 1.25 :weight 'bold)
-  (set-face-attribute 'org-level-3 nil :height 1.15 :weight 'bold)
-  (set-face-attribute 'org-level-4 nil :height 1.05)
+  (set-face-attribute 'org-level-2 nil :height 1.3 :weight 'bold)
+  (set-face-attribute 'org-level-3 nil :height 1.2 :weight 'bold)
+  (set-face-attribute 'org-level-4 nil :height 1.1)
   (set-face-attribute 'org-level-5 nil :height 1.0)
   (set-face-attribute 'org-document-title nil :height 1.6 :weight 'bold))
 
@@ -561,35 +563,59 @@
   '(("!="   . #x2260)
     ("::"   . #x2237)))
 
-;; Enable per-buffer via hook instead of global mode
-(add-hook 'after-change-major-mode-hook #'prettify-symbols-mode)
-
 ;; -- Org Capture Templates ----------------------------------
 (setq org-capture-templates
     '(
 
-    ("m" "Meeting Note" entry
-    (file (lambda ()
-	    (let* ((title (read-string "Meeting title: "))
-		    (attendees (read-string "Attendees (comma separated): "))
-		    (slug (replace-regexp-in-string " " "-" (downcase title))))
-	    (set-register ?m title)
-	    (set-register ?a attendees)
-	    (expand-file-name
-		(concat (format-time-string "%Y-%m-%d-") slug ".org")
-		"~/org/meetings/"))))
-    "* %(get-register ?m)\nAttendees: %(get-register ?a)\n\n** Notes\n-  %?\n\n** Action Items\n%(mapconcat (lambda (p) (concat \"*** \" (string-trim p) \"\\n-  \")) (split-string (get-register ?a) \",\") \"\\n\")\n"
-    :empty-lines 1)
+    ("m" "Meeting" entry 
+    (file+datetree "~/org/meetings.org")
+    "* %^{Meeting title} %? :meeting:\n:ATTENDEES: %^{Attendees (comma separated)}\n\n** Notes\n- \n\n** Action Items\n*** TODO [#A] "
+    :tree-type week
+    :clock-in t
+    :clock-resume t
+    :empty-lines 0)
 
     ("t" "Todo" entry
     (file+headline "~/org/todo.org" "Tasks")
     "* TODO %^{Task}\nSCHEDULED: %^t DEADLINE: %^t\n\n-  %?"
-    :empty-lines 1)
+    :empty-lines 0)
+
+    ("j" "Work Log Entry" entry
+    (file+datetree "~/org/work-log.org")
+    "* %?"
+    :empty-lines 0)
 
     ("n" "Quick Note" entry
      (file+datetree "~/org/notes.org")
      "* %^{Title}\n%T\n\n%?\n"
-     :empty-lines 1)))
+     :empty-lines 0)))
+
+;; TODO states
+(setq org-todo-keywords
+      '((sequence "TODO(t)" "PLANNING(p)" "IN-PROGRESS(i@/!)" "VERIFYING(v!)" "BLOCKED(b@)"  "|" "DONE(d!)" "OBE(o@!)" "WONT-DO(w@/!)" )
+        ))
+
+;; Fancy css
+(setq org-html-head 
+      "<style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          line-height: 1.6;
+          max-width: 40rem;
+          margin: 40px auto;
+          padding: 0 10px;
+          color: #333;
+          background-color: #fdfdfd;
+        }
+        h1, h2, h3 { line-height: 1.2; color: #111; }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 85%; }
+        pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; border-radius: 5px; }
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .todo { color: #d9534f; font-weight: bold; }
+        .done { color: #5cb85c; font-weight: bold; }
+       </style>")
 
 ;; Tell org-agenda which files to scan
 (setq org-agenda-files '("~/org/todo.org"
