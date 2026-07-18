@@ -72,11 +72,21 @@
   (setq evil-want-keybinding nil)
   :config
   (evil-mode 1)
-  (define-key evil-normal-state-map "H" 'my/next-buffer)
-  (define-key evil-normal-state-map "L" 'my/prev-buffer)
+  ;; (define-key evil-normal-state-map "H" 'my/next-buffer)
+  ;; (define-key evil-normal-state-map "L" 'my/prev-buffer)
   (define-key evil-normal-state-map "U" 'undo-redo)
   (global-set-key (kbd "C-=") #'global-text-scale-adjust)
   (global-set-key (kbd "C--") #'global-text-scale-adjust))
+
+;; 1. Make the normal/motion state maps act as high-priority intercepts
+(evil-make-intercept-map evil-normal-state-map)
+(evil-make-intercept-map evil-motion-state-map)
+
+;; 2. Bind your universal buffer navigation keys
+(define-key evil-normal-state-map (kbd "H") #'my/next-buffer)
+(define-key evil-normal-state-map (kbd "L") #'my/prev-buffer)
+(define-key evil-motion-state-map (kbd "H") #'my/next-buffer)
+(define-key evil-motion-state-map (kbd "L") #'my/prev-buffer)
 
 ;; -- Evil Collection ----------------------------------------
 (use-package evil-collection
@@ -185,14 +195,14 @@
   :config
   ;; Main leader
   (general-create-definer doom-leader-keys
-    :keymaps '(normal insert visual emacs)
+    :keymaps '(normal visual emacs)
     :prefix "SPC"
     :global-prefix "C-SPC")
 
   ;; Local leader for org-mode
   (general-create-definer doom-local-leader-keys
     :keymaps 'org-mode-map
-    :states '(normal visual insert emacs)
+    :states '(normal visual emacs)
     :prefix "SPC m"
     :global-prefix "C-SPC m")
 
@@ -434,6 +444,7 @@
 
     ;; Export
     "e"   '(org-export-dispatch :which-key "Export")
+    "E"   '((lambda () (interactive) (org-export-dispatch '(4))) :which-key "Export Subtree")
 
     ;; Babel
     "b"   '(:ignore t :which-key "tables/babel")
@@ -481,6 +492,9 @@
   (setq catppuccin-flavor 'macchiato)
   (load-theme 'catppuccin t))
 
+;; -- tldr ---------------------------------------------------
+(use-package tldr)
+
 ;; -- Org Mode -----------------------------------------------
 (setq org-directory "~/org")
 
@@ -500,18 +514,17 @@
 (setq org-return-follows-link t)
 (setq org-hide-emphasis-markers t)
 
+(defun my/org-smart-backspace ()
+  "Delete empty bullets cleanly, otherwise delete characters normally."
+  (interactive)
+  (let ((line (buffer-substring-no-properties (line-beginning-position) (point))))
+    ;; Fixed regex syntax for bullet matching
+    (if (string-match-p "^\\s-*\\(- \\|\\* \\|\\+ \\|[0-9]+\\.\\s-\\)\\s-*$" line)
+        (kill-line 0)
+      (call-interactively #'backward-delete-char-untabify))))
+
 (with-eval-after-load 'org
-  ;; Built-in smart deletion for empty list bullets
-  (define-key org-mode-map (kbd "DEL") ; DEL is the Backspace key in Emacs
-    (lambda ()
-      (interactive)
-      (let ((line (buffer-substring-no-properties (line-beginning-position) (point))))
-        ;; If the line contains only an empty bullet (e.g., "- ", "1. ", or "+ ")
-        (if (string-match-p "^\\s-*\\(- \\|\\* \\|+\ \|[0-9]+\\.\\s-\\)\\s-*$" line)
-            (kill-line 0) ; Delete the entire bullet and indentation instantly
-          (backward-delete-char-untabify 1)))))) ; Otherwise, delete normally
-
-
+  (define-key org-mode-map (kbd "DEL") #'my/org-smart-backspace))
 
 ;; Enable Markdown export safely via use-package
 (use-package ox-gfm
@@ -768,20 +781,6 @@
                               f))))))
   (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
 
-;; Make SPC leader work in magit buffers
-(with-eval-after-load 'magit
-  (evil-define-key 'normal magit-mode-map
-    (kbd "H") 'my/next-buffer
-    (kbd "L") 'my/prev-buffer)
-  (evil-define-key 'normal magit-status-mode-map
-    (kbd "H") 'my/next-buffer
-    (kbd "L") 'my/prev-buffer)
-  (evil-define-key 'normal magit-log-mode-map
-    (kbd "H") 'my/next-buffer
-    (kbd "L") 'my/prev-buffer)
-  (evil-define-key 'normal magit-diff-mode-map
-    (kbd "H") 'my/next-buffer
-    (kbd "L") 'my/prev-buffer))
 
 (with-eval-after-load 'magit (dolist (map (list magit-mode-map
                      magit-status-mode-map
@@ -859,9 +858,9 @@
  '(package-selected-packages
    '(activities avy catppuccin-theme centered-cursor-mode evil-collection
 		evil-nerd-commenter evil-org evil-surround general
-		magit marginalia orderless ox-gfm projectile
-		rainbow-delimiters tabspaces undo-history verilog-mode
-		vertico)))
+		magit marginalia orderless org-superstar ox-gfm
+		projectile rainbow-delimiters tabspaces tldr
+		undo-history verilog-mode vertico)))
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
