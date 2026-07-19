@@ -48,30 +48,39 @@
 
 ;; -- Skip special buffers with H/L -------------------------
 (defun my/next-buffer ()
-  "Go to next buffer, strictly honoring frame isolation and ignoring internal ones."
+  "Go to the next valid user buffer in the current perspective."
   (interactive)
-  (let* ((start (current-buffer))
-         (frame (selected-frame))
-         ;; Get the exact, current list of buffers assigned to this frame
-         (frame-buffers (frame-parameter frame 'buffer-list)))
-    (next-buffer)
-    (while (and (or (string-match-p "^\\*" (buffer-name))
-                    (not (memq (current-buffer) frame-buffers)))
-                (not (eq (current-buffer) start)))
-      (next-buffer))))
+  (let* ((all-buffers (persp-current-buffer-names))
+         ;; Filter out any internal system buffers starting with *
+         (clean-list (cl-remove-if (lambda (name) (string-match-p "^\\*" name)) all-buffers))
+         (current-name (buffer-name (current-buffer)))
+         (rotated-list (append (cdr (member current-name clean-list)) clean-list))
+         (chosen nil))
+    (dolist (name rotated-list)
+      (when (and (not chosen)
+                 (not (string-equal name current-name)))
+        (setq chosen name)))
+    (if chosen
+        (switch-to-buffer chosen)
+      (message "No other user buffers in this perspective."))))
 
 (defun my/prev-buffer ()
-  "Go to previous buffer, strictly honoring frame isolation and ignoring internal ones."
+  "Go to the previous valid user buffer in the current perspective."
   (interactive)
-  (let* ((start (current-buffer))
-         (frame (selected-frame))
-         ;; Get the exact, current list of buffers assigned to this frame
-         (frame-buffers (frame-parameter frame 'buffer-list)))
-    (previous-buffer)
-    (while (and (or (string-match-p "^\\*" (buffer-name))
-                    (not (memq (current-buffer) frame-buffers)))
-                (not (eq (current-buffer) start)))
-      (previous-buffer))))
+  (let* ((all-buffers (persp-current-buffer-names))
+         ;; Filter out any internal system buffers starting with *
+         (clean-list (cl-remove-if (lambda (name) (string-match-p "^\\*" name)) all-buffers))
+         (reversed-list (reverse clean-list))
+         (current-name (buffer-name (current-buffer)))
+         (rotated-list (append (cdr (member current-name reversed-list)) reversed-list))
+         (chosen nil))
+    (dolist (name rotated-list)
+      (when (and (not chosen)
+                 (not (string-equal name current-name)))
+        (setq chosen name)))
+    (if chosen
+        (switch-to-buffer chosen)
+      (message "No other user buffers in this perspective."))))
 
 ;; -- Evil Mode ----------------------------------------------
 (use-package evil
@@ -118,41 +127,31 @@
   (global-evil-surround-mode 1))
 
 ;; -- Session/Workspace Persistence -------------------------
-(require 'desktop)
-(desktop-save-mode 1)
-(setq desktop-auto-save-timeout 30)
-(setq desktop-restore-eager 5)
+(use-package perspective
+  :custom
+  (persp-mode-prefix-key (kbd "C-c x"))
+  :config
+  (persp-mode 1)
+  ;; Restores the "+" button on the tab bar
+  (setq perspective-show-modestring nil)
+  (tab-bar-mode 1)
+  (setq tab-bar-format '(tab-bar-format-history 
+                         tab-bar-format-tabs 
+                         tab-bar-format-add-tab
+                         tab-bar-format-align-right 
+                         tab-bar-format-global))
+  ;; Native Perspective Session Saving (Replaces desktop-mode safely)
+  (setq persp-state-default-file (expand-file-name "persp-state" user-emacs-directory))
+  ;; Auto-save your workspaces and buffers on exit
+  (add-hook 'kill-emacs-hook #'persp-state-save))
 
-;; 1. Tell the desktop engine how to save Eshell buffers cleanly without a file
-(defun my/desktop-save-eshell (_desktop-dirname)
-  "Save the directory state of an eshell buffer to the desktop file safely."
-  (cons default-directory nil))
-
-;; 2. Define the restoration handler with proper argument matching
-(defun my/restore-eshell-handler (_buffer-file-name buffer-name misc)
-  "Safely reconstruct the eshell buffer using its saved directory context."
-  (let ((dir (car misc))
-        (buf (get-buffer-create buffer-name)))
-    (with-current-buffer buf
-      (when dir (setq default-directory dir))
-      ;; Initialize eshell environment cleanly without blocking startup
-      (unless (derived-mode-p 'eshell-mode)
-        (eshell-mode)))
-    buf))
-
-;; 3. Register everything safely after the desktop library finishes loading
-(with-eval-after-load 'desktop
-  ;; Map the save and restore routines to eshell-mode
-  (add-to-list 'desktop-buffer-mode-handlers '(eshell-mode . my/restore-eshell-handler))
+(with-eval-after-load 'perspective
+  ;; Remove the perspective binding for '/' so Evil search can claim it
+  (define-key persp-mode-map (kbd "/") nil)
   
-  ;; Modify the exclusion filter so it doesn't discard *eshell* buffers
-  (setq desktop-buffers-not-to-save 
-        "\\(^\\([^\\*[:nonascii:]]\\|\\*\\(scratch\\|Messages\\)\\*\\)$\\)"))
-
-;; 4. Hook the custom saver directly into every active Eshell buffer
-(add-hook 'eshell-mode-hook
-          (lambda ()
-            (setq-local desktop-save-buffer 'my/desktop-save-eshell)))
+  ;; If you use the perspective prefix keymap (e.g., C-x x), ensure it's clear there too
+  (when (boundp 'perspective-map)
+    (define-key perspective-map (kbd "/") nil)))
 
 (defun my/frame-isolated-eshell (&optional arg)
   "Open or create an Eshell buffer unique to the current frame.
@@ -173,44 +172,22 @@ With a prefix ARG, prompts for a session name."
                              default-directory)))
     (my/frame-isolated-eshell)))
 
-(defun my/beframe-unassume-current-buffer ()
-  "Unassume the current buffer from the frame and switch to another frame buffer.
-If the buffer is not assumed by any other open frame, it is killed globally."
+(defun my/persp-kill-or-remove-current-buffer ()
+  "Remove current buffer from the perspective and let perspective.el handle the global kill if unreferenced."
   (interactive)
   (let* ((buf (current-buffer))
-         (frame (selected-frame))
-         (remaining (beframe-buffer-list frame)))
-    (if (> (length remaining) 1)
-        (let ((chosen nil))
-          ;; 1. Directly remove the buffer from the current frame's local list
-          (set-frame-parameter 
-           frame 'buffer-list 
-           (delq buf (frame-parameter frame 'buffer-list)))
-          ;; 2. Find the next valid buffer that doesn't start with "*"
-          (dolist (b remaining)
-            (when (and (not chosen)
-                       (not (eq b buf))
-                       (not (string-match-p "^\\*" (buffer-name b))))
-              (setq chosen b)))
-          ;; 3. Switch to the new candidate or fallback safely
-          (if chosen
-              (switch-to-buffer chosen)
-            (let ((next-fallback (car (delq buf remaining))))
-              (if next-fallback
-                  (switch-to-buffer next-fallback)
-                (switch-to-buffer "*scratch*"))))
-          ;; 4. If no other frame assumes this buffer, kill it globally
-          (let ((assumed-elsewhere nil))
-            (dolist (f (frame-list))
-              (unless (eq f frame)
-                (when (memq buf (frame-parameter f 'buffer-list))
-                  (setq assumed-elsewhere t))))
-            (unless assumed-elsewhere
-              (kill-buffer buf))))
-      ;; Fallback if it is the last buffer in the frame
-      (unless (string-equal (buffer-name buf) "*scratch*")
-        (switch-to-buffer "*scratch*")
-        (kill-buffer buf)))))
+         (buf-name (buffer-name buf))
+         ;; Gather other valid user buffers in this perspective
+         (all-buffers (persp-current-buffer-names))
+         (clean-list (cl-remove-if (lambda (name) (string-match-p "^\\*" name)) all-buffers))
+         (sibling-user-buffers (cl-remove buf-name clean-list :test #'string-equal))
+         (target-fallback (car sibling-user-buffers)))
+    ;; 1. Evacuate the window safely within local isolation bounds first
+    (if target-fallback
+        (switch-to-buffer target-fallback)
+      (switch-to-buffer "*scratch*"))
+    ;; 2. Hand off the target buffer to perspective's internal reference engine
+    (persp-remove-buffer buf)))
 
 ;; -- Yank Flymake Error at Point ----------------------------
 (defun my/yank-flymake-error ()
@@ -233,10 +210,11 @@ If the buffer is not assumed by any other open frame, it is killed globally."
       (message "No message to copy."))))
 
 (defun my/switch-to-buffer ()
-  "Switch to a buffer, filtering out special buffers."
+  "Switch to a perspective buffer, filtering out special buffers."
   (interactive)
   (let ((completion-regexp-list (cons "^[^*]" completion-regexp-list)))
-    (call-interactively #'switch-to-buffer)))
+    (persp-switch-to-buffer* 
+     (persp-read-buffer "Switch to buffer: " nil t))))
 
 (defun my/safely-close-workspace ()
   "Prompt the user to explicitly confirm before destroying the active workspace."
@@ -273,8 +251,12 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     ;; Quit / Session
     "q"   '(:ignore t :which-key "quit/session")
     "qq"  '(save-buffers-kill-terminal :which-key "Quit Emacs")
-    "qs"  '(desktop-save-in-desktop-dir :which-key "Save session")
-    "ql"  '(desktop-read :which-key "Load session")
+    "qs"  '(persp-state-save :which-key "Save session")
+    "ql"  '(persp-state-load :which-key "Load session")
+    ;; "ql"  '((lambda () 
+    ;;          (interactive) 
+    ;;          (persp-state-load persp-state-default-file)) 
+    ;;        :which-key "Load session")
     "qr"  '(restart-emacs :which-key "Restart Emacs")
 
     ;; Files
@@ -306,8 +288,8 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     "b"   '(:ignore t :which-key "buffers")
     "bb"  '(my/switch-to-buffer :which-key "Switch buffer")
     "bi"  '(ibuffer :which-key "List all buffers")
-    "bd"  '(my/beframe-unassume-current-buffer :which-key "Remove buffer from frame")
-    "bc"  '(my/beframe-unassume-current-buffer :which-key "Remove buffer from frame")
+    "bd"  '(my/persp-kill-or-remove-current-buffer :which-key "Remove buffer from frame")
+    "bc"  '(my/persp-kill-or-remove-current-buffer :which-key "Remove buffer from frame")
     "bn"  '(next-buffer :which-key "Next buffer")
     "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
     "bp"  '(previous-buffer :which-key "Prev buffer")
@@ -554,14 +536,6 @@ If the buffer is not assumed by any other open frame, it is killed globally."
   (setq catppuccin-flavor 'macchiato)
   (load-theme 'catppuccin t))
 
-;; -- Frame isolation ----------------------------------------
-(use-package beframe
-  :init
-  (beframe-mode 1)
-  :custom
-  ;; Automatically un-isolate global/scratch buffers so you can always see them
-  (beframe-global-buffers '("*scratch*" "*Messages*" "*Help*")))
-
 (undelete-frame-mode 1)
 
 ;; -- tldr ---------------------------------------------------
@@ -652,7 +626,7 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     :tree-type week
     :clock-in t
     :clock-resume t
-    :empty-line Soms 0)
+    :empty-line 0)
 
     ("t" "Todo" entry
     (file+headline "~/org/todo.org" "Tasks")
@@ -755,38 +729,39 @@ If the buffer is not assumed by any other open frame, it is killed globally."
   (add-hook 'eshell-mode-hook (lambda () (centered-cursor-mode -1))))
 
 ;; --- Two-Tier Workspace/Buffer Tabs ---
-(use-package tab-bar
-  :ensure nil
-  :init
-  (tab-bar-mode 1)
-  :custom
-  (tab-bar-new-tab-to 'rightmost)
-  :config
-  ;; --- Enhance Active Tab Visibility ---
-  (with-eval-after-load 'catppuccin-theme
-    (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
-          (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
-          (bg-inactive  "#24273a")  ; Macchiato Surface
-          (fg-inactive  "#cad3f5")) ; Macchiato Text
+;; (use-package tab-bar
+;;   :ensure nil
+;;   :init
+;;   (tab-bar-mode 1)
+;;   :custom
+;;   (tab-bar-new-tab-to 'rightmost)
+;;   :config
+;;   ;; --- Enhance Active Tab Visibility ---
+;;   (with-eval-after-load 'catppuccin-theme
+;;     (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
+;;           (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
+;;           (bg-inactive  "#24273a")  ; Macchiato Surface
+;;           (fg-inactive  "#cad3f5")) ; Macchiato Text
 
-      ;; Styling for the currently active tab
-      (set-face-attribute 'tab-bar-tab nil
-                          :background bg-active
-                          :foreground fg-active
-                          :weight 'bold
-                          :box `(:line-width (6 . 3) :color ,bg-active))
+;;       ;; Styling for the currently active tab
+;;       (set-face-attribute 'tab-bar-tab nil
+;;                           :background bg-active
+;;                           :foreground fg-active
+;;                           :weight 'bold
+;;                           :box `(:line-width (6 . 3) :color ,bg-active))
 
-      ;; Styling for all inactive tabs
-      (set-face-attribute 'tab-bar-tab-inactive nil
-                          :background bg-inactive
-                          :foreground fg-inactive
-                          :weight 'normal
-                          :box `(:line-width (6 . 3) :color ,bg-inactive))
+;;       ;; Styling for all inactive tabs
+;;       (set-face-attribute 'tab-bar-tab-inactive nil
+;;                           :background bg-inactive
+;;                           :foreground fg-inactive
+;;                           :weight 'normal
+;;                           :box `(:line-width (6 . 3) :color ,bg-inactive))
 
-      ;; Styling for the empty remaining space behind the tabs
-      (set-face-attribute 'tab-bar nil
-                          :background "#181926" ; Darker crust color
-                          :foreground fg-inactive))))
+;;       ;; Styling for the empty remaining space behind the tabs
+;;       (set-face-attribute 'tab-bar nil
+;;                           :background "#181926" ; Darker crust color
+;;                           :foreground fg-inactive))))
+
 
 ;; Prevent Emacs from treating side-window parents as un-splittable blocks
 (setq window-combination-resize t)
@@ -951,8 +926,7 @@ If the buffer is not assumed by any other open frame, it is killed globally."
   (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
   (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
   (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
-  (evil-ex-define-cmd "bd" #'my/beframe-unassume-current-buffer)
-  (evil-ex-define-cmd "bc" #'my/beframe-unassume-current-buffer))
+  )
 
 ;; -- Rainbow Delimiters -------------------------------------
 (use-package rainbow-delimiters
@@ -979,9 +953,9 @@ If the buffer is not assumed by any other open frame, it is killed globally."
    '(activities avy beframe catppuccin-theme centered-cursor-mode
 		evil-collection evil-nerd-commenter evil-org
 		evil-surround flyspell-correct general magit
-		marginalia orderless org-superstar ox-gfm projectile
-		rainbow-delimiters tldr undo-history verilog-mode
-		vertico)))
+		marginalia orderless org-superstar ox-gfm perspective
+		projectile rainbow-delimiters tldr undo-history
+		verilog-mode vertico)))
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
