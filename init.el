@@ -445,6 +445,13 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     ;; Notes
     "n"  '(org-capture :which-key "New note")
 
+    ;; Spellchecking
+    "S"   '(:ignore t :which-key "spellcheck")
+    "St"  '(flyspell-mode :which-key "Toggle spellcheck")
+    "Sb"  '(flyspell-buffer :which-key "Spellcheck buffer")
+    "Sn"  '(flyspell-goto-next-error :which-key "Next spelling error")
+    "Sc"  '(flyspell-correct-wrapper :which-key "Correct word at point")
+
     ;; Workspaces (TAB)
     "TAB"     '(:ignore t :which-key "workspaces")
     "TAB TAB"  '(tab-bar-switch-to-tab :which-key "Switch workspace")
@@ -545,17 +552,17 @@ If the buffer is not assumed by any other open frame, it is killed globally."
 (use-package catppuccin-theme
   :config
   (setq catppuccin-flavor 'macchiato)
-  (load-theme 'catppuccin t)
+  (load-theme 'catppuccin t))
 
 ;; -- Frame isolation ----------------------------------------
-
-
 (use-package beframe
   :init
   (beframe-mode 1)
   :custom
   ;; Automatically un-isolate global/scratch buffers so you can always see them
   (beframe-global-buffers '("*scratch*" "*Messages*" "*Help*")))
+
+(undelete-frame-mode 1)
 
 ;; -- tldr ---------------------------------------------------
 (use-package tldr)
@@ -667,6 +674,19 @@ If the buffer is not assumed by any other open frame, it is killed globally."
       '((sequence "TODO(t)" "PLANNING(p)" "IN-PROGRESS(i@/!)" "VERIFYING(v!)" "BLOCKED(b@)"  "|" "DONE(d!)" "OBE(o@!)" "WONT-DO(w@/!)" )
         ))
 
+;; TODO colors
+(setq org-todo-keyword-faces
+      '(
+        ("TODO" . (:foreground "GoldenRod" :weight bold))
+        ("PLANNING" . (:foreground "DeepPink" :weight bold))
+        ("IN-PROGRESS" . (:foreground "Cyan" :weight bold))
+        ("VERIFYING" . (:foreground "DarkOrange" :weight bold))
+        ("BLOCKED" . (:foreground "Red" :weight bold))
+        ("DONE" . (:foreground "LimeGreen" :weight bold))
+        ("OBE" . (:foreground "LimeGreen" :weight bold))
+        ("WONT-DO" . (:foreground "LimeGreen" :weight bold))
+        ))
+
 ;; Fancy css
 (setq org-html-head 
       "<style>
@@ -700,6 +720,29 @@ If the buffer is not assumed by any other open frame, it is killed globally."
   :hook (org-mode . evil-org-mode)
   :config
   (evil-org-set-key-theme '(navigation insert textobjects additional calendar return)))
+
+;; -- Spellcheck ---------------------------------------------
+(use-package flyspell
+  :ensure nil ; Built-in package
+  :hook ((text-mode . flyspell-mode)
+         (prog-mode . flyspell-prog-mode)) ; Checks only comments/strings in code
+  :config
+  (setq ispell-program-name "hunspell")
+  ;; Doom configuration optimizations for performance
+  (setq flyspell-issue-message-flag nil
+        flyspell-issue-welcome-flag nil)
+  
+  ;; Configure hunspell arguments
+  (setq ispell-local-dictionary "en_US")
+  (setq ispell-dictionary-alist
+        '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8))))
+
+(use-package flyspell-correct
+  :ensure t
+  :after flyspell
+  :config
+  ;; Dictates how spelling popups appear. Doom uses standard completion.
+  (define-key flyspell-mode-map [remap flyspell-correct-word-before-point] #'flyspell-correct-wrapper))
 
 ;; -- Native Comp Warnings (suppress) -----------------------
 (setq native-comp-async-report-warnings-errors nil)
@@ -935,9 +978,10 @@ If the buffer is not assumed by any other open frame, it is killed globally."
  '(package-selected-packages
    '(activities avy beframe catppuccin-theme centered-cursor-mode
 		evil-collection evil-nerd-commenter evil-org
-		evil-surround general magit marginalia orderless
-		org-superstar ox-gfm projectile rainbow-delimiters
-		tldr undo-history verilog-mode vertico)))
+		evil-surround flyspell-correct general magit
+		marginalia orderless org-superstar ox-gfm projectile
+		rainbow-delimiters tldr undo-history verilog-mode
+		vertico)))
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
