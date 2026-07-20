@@ -544,6 +544,19 @@ With a prefix ARG, prompts for a session name."
 ;; -- Org Mode -----------------------------------------------
 (setq org-directory "~/org")
 
+;; With use-package + straight or elpaca:
+(use-package org-modern
+  :hook (org-mode . org-modern-mode)
+  :custom
+  (org-modern-star '("◉" "○" "◆" "◇" "▶"))   ; custom heading bullets
+  (org-modern-list '((?- . "•") (?+ . "◦") (?* . "▸")))  ; list markers
+  (org-modern-checkbox '((?  . "☐") (?X . "☑") (?- . "◫")))
+  (org-modern-table t)
+  (org-modern-block-name t))
+
+(setq org-hide-leading-stars t)
+(setq org-startup-indented t)
+
 (defun my/auto-insert-org-template ()
   "Insert default Org header if new .org file is empty."
   (when (and (buffer-file-name)
@@ -635,7 +648,7 @@ With a prefix ARG, prompts for a session name."
 
     ("j" "Work Log Entry" entry
     (file+datetree "~/org/work-log.org")
-    "* %?"
+    "%?"
     :empty-lines 0)
 
     ("n" "Quick Note" entry
@@ -693,7 +706,7 @@ With a prefix ARG, prompts for a session name."
   :after (evil org)
   :hook (org-mode . evil-org-mode)
   :config
-  (evil-org-set-key-theme '(navigation insert textobjects additional calendar return)))
+  (evil-org-set-key-theme '(navigation insert textobjects additional todo calendar return)))
 
 ;; -- Spellcheck ---------------------------------------------
 (use-package flyspell
@@ -920,6 +933,13 @@ With a prefix ARG, prompts for a session name."
     (slot . 2)
     (window-height . 0.2)))
 
+(add-to-list 'display-buffer-alist
+  '("\\*terminal\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 3)
+    (window-height . 0.2)))
+
 ;; Make j/k move by visual lines not logical lines
 (with-eval-after-load 'evil
   (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
@@ -950,12 +970,12 @@ With a prefix ARG, prompts for a session name."
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(activities avy beframe catppuccin-theme centered-cursor-mode
-		evil-collection evil-nerd-commenter evil-org
-		evil-surround flyspell-correct general magit
-		marginalia orderless org-superstar ox-gfm perspective
-		projectile rainbow-delimiters tldr undo-history
-		verilog-mode vertico)))
+   '(activities avy catppuccin-theme centered-cursor-mode evil-collection
+		evil-nerd-commenter evil-org evil-surround
+		flyspell-correct general magit marginalia orderless
+		org-modern org-superstar ox-gfm perspective projectile
+		rainbow-delimiters tldr undo-history verilog-mode
+		vertico)))
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
@@ -963,4 +983,3 @@ With a prefix ARG, prompts for a session name."
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  )
-
