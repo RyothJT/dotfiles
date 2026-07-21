@@ -38,6 +38,31 @@
 (global-visual-line-mode 1)
 (setq-default truncate-lines nil)
 
+;; Auto revert buffers, ask when modified
+(setq global-auto-revert-mode t)
+
+(defvar my/frame-bg-colors
+  '("#24273a"   ; base          - original macchiato bg
+    "#161822"   ; deep indigo   - much darker, cool
+    "#2d2a3e"   ; purple tint   - warmer, more violet
+    "#1a2436"   ; deep navy     - strong blue shift
+    "#2e2418")  ; dark amber    - warm brown contrast
+  "List of Catppuccin Macchiato-inspired background colors to cycle through.")
+
+(defvar my/frame-bg-index 0
+  "Current index into `my/frame-bg-colors'.")
+
+(defun my/cycle-frame-background ()
+  "Cycle through Catppuccin Macchiato-inspired background colors."
+  (interactive)
+  (setq my/frame-bg-index
+        (mod (1+ my/frame-bg-index) (length my/frame-bg-colors)))
+  (let ((color (nth my/frame-bg-index my/frame-bg-colors)))
+    (set-frame-parameter (selected-frame) 'background-color color)
+    (message "Background: %s" color)))
+
+(global-set-key (kbd "C-c T") #'my/cycle-frame-background)
+
 ;; -- Font ---------------------------------------------------
 (set-face-attribute 'default nil
   :font "JetBrains Mono"
@@ -305,17 +330,9 @@ With a prefix ARG, prompts for a session name."
     "wl"  '(windmove-right :which-key "Window right")
     "wk"  '(windmove-up :which-key "Window up")
     "wj"  '(windmove-down :which-key "Window down")
-    "wm" '(toggle-frame-maximized :which-key "Maximize frame")
-    "wf" '(toggle-frame-fullscreen :which-key "Fullscreen")
-
-    ;; Window Close/Delete Sub-menu (SPC w c)
-    "wc"  '(:ignore t :which-key "close/delete")
-    "wcc" '(delete-window :which-key "Delete current window")
-    "wco" '(delete-other-windows :which-key "Delete other windows (maximize)")
-    "wch" '(windmove-delete-left :which-key "Delete window left")
-    "wcj" '(windmove-delete-down :which-key "Delete window below")
-    "wck" '(windmove-delete-up :which-key "Delete window above")
-    "wcl" '(windmove-delete-right :which-key "Delete window right")
+    "wm"  '(toggle-frame-maximized :which-key "Maximize frame")
+    "wf"  '(toggle-frame-fullscreen :which-key "Fullscreen")
+    "wc"  '(delete-window :which-key "Delete current window")
 
     ;; Search
     "s"   '(:ignore t :which-key "search")
@@ -335,6 +352,7 @@ With a prefix ARG, prompts for a session name."
     "hw"  '(woman :which-key "Man page (woman)")
     "hr"  '((lambda () (interactive) (load-file user-init-file)) :which-key "Reload config")
     "hy" '(my/yank-last-message :which-key "Yank last message")
+    "hb" '(my/cycle-frame-background :which-key "Cycle frame background color")
     "fy" '((lambda () (interactive)
           (let ((path (buffer-file-name)))
             (if path
@@ -421,6 +439,7 @@ With a prefix ARG, prompts for a session name."
 
     ;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
+    "ot"  '(term :which-key "Open term")
     "oe"  '(my/frame-isolated-eshell :which-key "Open eshell")
     "oE"  '(my/project-eshell :which-key "Open new eshell")
 
@@ -538,6 +557,40 @@ With a prefix ARG, prompts for a session name."
 
 (undelete-frame-mode 1)
 
+;; --- Two-Tier Workspace/Buffer Tabs ---
+(use-package tab-bar
+  :ensure nil
+  :init
+  (tab-bar-mode 1)
+  :custom
+  (tab-bar-new-tab-to 'rightmost)
+  :config
+  ;; --- Enhance Active Tab Visibility ---
+  (with-eval-after-load 'catppuccin-theme
+    (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
+          (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
+          (bg-inactive  "#24273a")  ; Macchiato Surface
+          (fg-inactive  "#cad3f5")) ; Macchiato Text
+
+      ;; Styling for the currently active tab
+      (set-face-attribute 'tab-bar-tab nil
+                          :background bg-active
+                          :foreground fg-active
+                          :weight 'bold
+                          :box `(:line-width (6 . 3) :color ,bg-active))
+
+      ;; Styling for all inactive tabs
+      (set-face-attribute 'tab-bar-tab-inactive nil
+                          :background bg-inactive
+                          :foreground fg-inactive
+                          :weight 'normal
+                          :box `(:line-width (6 . 3) :color ,bg-inactive))
+
+      ;; Styling for the empty remaining space behind the tabs
+      (set-face-attribute 'tab-bar nil
+                          :background "#181926" ; Darker crust color
+                          :foreground fg-inactive))))
+
 ;; -- tldr ---------------------------------------------------
 (use-package tldr)
 
@@ -585,9 +638,21 @@ With a prefix ARG, prompts for a session name."
 (with-eval-after-load 'org
   (define-key org-mode-map (kbd "DEL") #'my/org-smart-backspace))
 
-;; Enable Markdown export safely via use-package
 (use-package ox-gfm
-  :after org)
+  :after org
+  :config
+  (defun my/ox-gfm-fix-links (output backend info)
+    "Strip Org anchor tags and convert TOC links to plain text in GFM export."
+    (when (eq backend 'gfm)
+      ;; Remove <a id="orgXXX"></a> anchors
+      (setq output (replace-regexp-in-string
+                    "<a id=\"org[^\"]*\"></a>\n?" "" output))
+      ;; Convert [Title](#orgXXX) → Title (plain text, keep list structure)
+      (setq output (replace-regexp-in-string
+                    "\\[\\([^]]+\\)\\](#org[a-z0-9]+)" "\\1" output))
+      output))
+  (add-to-list 'org-export-filter-final-output-functions
+               #'my/ox-gfm-fix-links))
 
 ;; -- Org Mode Header Sizes ----------------------------------
 (with-eval-after-load 'org
@@ -601,7 +666,9 @@ With a prefix ARG, prompts for a session name."
 (use-package projectile
   :config
   (projectile-mode 1)
-  (setq projectile-project-search-path '("/mnt/c/work/projects/")))
+  (setq projectile-project-search-path '("/mnt/c/work/projects/"))
+  (setq projectile-enable-caching 'persistent)
+  (setq projectile-auto-update-cache t))
 
 ;; -- Arrow replacement via post-insert hook -----------------
 (defvar my/arrow-replacements
@@ -643,12 +710,12 @@ With a prefix ARG, prompts for a session name."
 
     ("t" "Todo" entry
     (file+headline "~/org/todo.org" "Tasks")
-    "* TODO %^{Task}\nSCHEDULED: %^t DEADLINE: %^t\n\n-  %?"
+    "* TODO %^{Task}\nSCHEDULED: %^t DEADLINE: %^t\n-  %?"
     :empty-lines 0)
 
     ("j" "Work Log Entry" entry
     (file+datetree "~/org/work-log.org")
-    "%?"
+    "* %?"
     :empty-lines 0)
 
     ("n" "Quick Note" entry
@@ -738,43 +805,10 @@ With a prefix ARG, prompts for a session name."
 (use-package centered-cursor-mode
   :config
   (global-centered-cursor-mode 1)
-  (add-hook 'term-mode-hook (lambda () (centered-cursor-mode -1)))
-  (add-hook 'eshell-mode-hook (lambda () (centered-cursor-mode -1))))
-
-;; --- Two-Tier Workspace/Buffer Tabs ---
-;; (use-package tab-bar
-;;   :ensure nil
-;;   :init
-;;   (tab-bar-mode 1)
-;;   :custom
-;;   (tab-bar-new-tab-to 'rightmost)
-;;   :config
-;;   ;; --- Enhance Active Tab Visibility ---
-;;   (with-eval-after-load 'catppuccin-theme
-;;     (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
-;;           (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
-;;           (bg-inactive  "#24273a")  ; Macchiato Surface
-;;           (fg-inactive  "#cad3f5")) ; Macchiato Text
-
-;;       ;; Styling for the currently active tab
-;;       (set-face-attribute 'tab-bar-tab nil
-;;                           :background bg-active
-;;                           :foreground fg-active
-;;                           :weight 'bold
-;;                           :box `(:line-width (6 . 3) :color ,bg-active))
-
-;;       ;; Styling for all inactive tabs
-;;       (set-face-attribute 'tab-bar-tab-inactive nil
-;;                           :background bg-inactive
-;;                           :foreground fg-inactive
-;;                           :weight 'normal
-;;                           :box `(:line-width (6 . 3) :color ,bg-inactive))
-
-;;       ;; Styling for the empty remaining space behind the tabs
-;;       (set-face-attribute 'tab-bar nil
-;;                           :background "#181926" ; Darker crust color
-;;                           :foreground fg-inactive))))
-
+  (add-hook 'after-change-major-mode-hook
+            (lambda ()
+              (when (derived-mode-p 'term-mode 'eshell-mode)
+                (centered-cursor-mode -1)))))
 
 ;; Prevent Emacs from treating side-window parents as un-splittable blocks
 (setq window-combination-resize t)
@@ -911,7 +945,6 @@ With a prefix ARG, prompts for a session name."
 (setq magit-git-executable "git")
 
 ;; -- Popup Bottom Windows (Doom-style) ---------------------
-
 (add-to-list 'display-buffer-alist
   '("\\*scratch\\*"
     (display-buffer-in-side-window)
