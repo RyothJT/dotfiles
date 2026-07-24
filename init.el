@@ -21,7 +21,7 @@
 ;; -- UI -----------------------------------------------------
 (menu-bar-mode -1)
 (tool-bar-mode -1)
-(scroll-bar-mode -1)
+(scroll-bar-mode t)
 (setq display-line-numbers-type 'relative)
 (global-display-line-numbers-mode 1)
 (add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
@@ -571,21 +571,18 @@ With a prefix ARG, prompts for a session name."
           (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
           (bg-inactive  "#24273a")  ; Macchiato Surface
           (fg-inactive  "#cad3f5")) ; Macchiato Text
-
       ;; Styling for the currently active tab
       (set-face-attribute 'tab-bar-tab nil
                           :background bg-active
                           :foreground fg-active
                           :weight 'bold
                           :box `(:line-width (6 . 3) :color ,bg-active))
-
       ;; Styling for all inactive tabs
       (set-face-attribute 'tab-bar-tab-inactive nil
                           :background bg-inactive
                           :foreground fg-inactive
                           :weight 'normal
                           :box `(:line-width (6 . 3) :color ,bg-inactive))
-
       ;; Styling for the empty remaining space behind the tabs
       (set-face-attribute 'tab-bar nil
                           :background "#181926" ; Darker crust color
@@ -641,15 +638,46 @@ With a prefix ARG, prompts for a session name."
 (use-package ox-gfm
   :after org
   :config
+
+  (setq org-export-with-drawers t)
+  (setq org-export-with-clocks t)
+
   (defun my/ox-gfm-fix-links (output backend info)
-    "Strip Org anchor tags and convert TOC links to plain text in GFM export."
+    "Strip Org anchor tags, fix TOC links, and inject LOGBOOK clock date in GFM export."
     (when (eq backend 'gfm)
       ;; Remove <a id="orgXXX"></a> anchors
       (setq output (replace-regexp-in-string
                     "<a id=\"org[^\"]*\"></a>\n?" "" output))
-      ;; Convert [Title](#orgXXX) → Title (plain text, keep list structure)
+      ;; Convert [Title](#orgXXX) → plain text
       (setq output (replace-regexp-in-string
                     "\\[\\([^]]+\\)\\](#org[a-z0-9]+)" "\\1" output))
+      ;; Parse LOGBOOK from source buffer and inject date under matching headings
+      (with-current-buffer (plist-get info :input-buffer)
+        (org-element-map (org-element-parse-buffer) 'headline
+          (lambda (hl)
+            (let* ((title (org-element-property :raw-value hl))
+                   (drawer (car (org-element-map hl 'drawer
+                                  (lambda (d)
+                                    (when (string= (org-element-property :drawer-name d)
+                                                   "LOGBOOK")
+                                      d))
+                                  nil t)))
+                   (clock-el (when drawer
+                               (car (org-element-map drawer 'clock #'identity nil t))))
+                   (ts (when clock-el
+                         (org-element-property :value clock-el)))
+                   (date-str (when ts
+                               (format-time-string
+                                "%Y-%m-%d %A"
+                                (encode-time
+                                 (org-parse-time-string
+                                  (org-element-property :raw-value ts)))))))
+              (when (and title date-str)
+                (setq output
+                      (replace-regexp-in-string
+                       (concat "\\(^#+ " (regexp-quote title) "$\\)")
+                       (concat "\\1\n\n**Date:** " date-str)
+                       output)))))))
       output))
   (add-to-list 'org-export-filter-final-output-functions
                #'my/ox-gfm-fix-links))
@@ -701,7 +729,7 @@ With a prefix ARG, prompts for a session name."
     '(
 
     ("m" "Meeting" entry 
-    (file+datetree "~/org/meetings.org")
+    (file+olp+datetree "~/org/meetings.org")
     "* %^{Meeting title} %? :meeting:\n:ATTENDEES: %^{Attendees (comma separated)}\n\n** Notes\n- \n\n** Action Items\n*** TODO [#A] "
     :tree-type week
     :clock-in t
@@ -713,9 +741,9 @@ With a prefix ARG, prompts for a session name."
     "* TODO %^{Task}\nSCHEDULED: %^t DEADLINE: %^t\n-  %?"
     :empty-lines 0)
 
-    ("j" "Work Log Entry" entry
+    ("j" "Work Log Entry" item
     (file+datetree "~/org/work-log.org")
-    "* %?"
+    "- %?"
     :empty-lines 0)
 
     ("n" "Quick Note" entry
@@ -728,17 +756,24 @@ With a prefix ARG, prompts for a session name."
       '((sequence "TODO(t)" "PLANNING(p)" "IN-PROGRESS(i@/!)" "VERIFYING(v!)" "BLOCKED(b@)"  "|" "DONE(d!)" "OBE(o@!)" "WONT-DO(w@/!)" )
         ))
 
-;; TODO colors
-(setq org-todo-keyword-faces
+;; Force the base label face to not interfere
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
+
+(setq org-modern-todo-faces
       '(
-        ("TODO" . (:foreground "GoldenRod" :weight bold))
-        ("PLANNING" . (:foreground "DeepPink" :weight bold))
-        ("IN-PROGRESS" . (:foreground "Cyan" :weight bold))
-        ("VERIFYING" . (:foreground "DarkOrange" :weight bold))
-        ("BLOCKED" . (:foreground "Red" :weight bold))
-        ("DONE" . (:foreground "LimeGreen" :weight bold))
-        ("OBE" . (:foreground "LimeGreen" :weight bold))
-        ("WONT-DO" . (:foreground "LimeGreen" :weight bold))
+        ("TODO"        . (:background "GoldenRod"  :foreground "black" :weight bold))
+        ("PLANNING"    . (:background "DeepPink"   :foreground "white" :weight bold))
+        ("IN-PROGRESS" . (:background "Cyan"       :foreground "black" :weight bold))
+        ("VERIFYING"   . (:background "DarkOrange" :foreground "black" :weight bold))
+        ("BLOCKED"     . (:background "Red"        :foreground "white" :weight bold))
+        ("DONE"        . (:background "LimeGreen"  :foreground "black" :weight bold))
+        ("OBE"         . (:background "LimeGreen"  :foreground "black" :weight bold))
+        ("WONT-DO"     . (:background "LimeGreen"  :foreground "black" :weight bold))
         ))
 
 ;; Fancy css
@@ -785,18 +820,16 @@ With a prefix ARG, prompts for a session name."
   ;; Doom configuration optimizations for performance
   (setq flyspell-issue-message-flag nil
         flyspell-issue-welcome-flag nil)
-  
-  ;; Configure hunspell arguments
+
+  ;; Set the GLOBAL default dictionary (was ispell-local-dictionary — wrong var)
+  (setq ispell-dictionary "en_US")
   (setq ispell-local-dictionary "en_US")
-  (setq ispell-dictionary-alist
+  (setq flyspell-default-dictionary "en_US")
+
+  ;; Configure hunspell dictionary alist
+  (setq ispell-local-dictionary-alist
         '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8))))
 
-(use-package flyspell-correct
-  :ensure t
-  :after flyspell
-  :config
-  ;; Dictates how spelling popups appear. Doom uses standard completion.
-  (define-key flyspell-mode-map [remap flyspell-correct-word-before-point] #'flyspell-correct-wrapper))
 
 ;; -- Native Comp Warnings (suppress) -----------------------
 (setq native-comp-async-report-warnings-errors nil)
@@ -1005,14 +1038,9 @@ With a prefix ARG, prompts for a session name."
  '(package-selected-packages
    '(activities avy catppuccin-theme centered-cursor-mode evil-collection
 		evil-nerd-commenter evil-org evil-surround
-		flyspell-correct general magit marginalia orderless
-		org-modern org-superstar ox-gfm perspective projectile
-		rainbow-delimiters tldr undo-history verilog-mode
-		vertico)))
+		flyspell-correct general imenu-list magit marginalia
+		minimap orderless org-modern org-superstar ox-gfm
+		perspective projectile rainbow-delimiters sublimity
+		tldr undo-history verilog-mode vertico)))
 
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
+
