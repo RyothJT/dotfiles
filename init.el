@@ -41,27 +41,7 @@
 ;; Auto revert buffers, ask when modified
 (setq global-auto-revert-mode t)
 
-(defvar my/frame-bg-colors
-  '("#24273a"   ; base          - original macchiato bg
-    "#161822"   ; deep indigo   - much darker, cool
-    "#2d2a3e"   ; purple tint   - warmer, more violet
-    "#1a2436"   ; deep navy     - strong blue shift
-    "#2e2418")  ; dark amber    - warm brown contrast
-  "List of Catppuccin Macchiato-inspired background colors to cycle through.")
-
-(defvar my/frame-bg-index 0
-  "Current index into `my/frame-bg-colors'.")
-
-(defun my/cycle-frame-background ()
-  "Cycle through Catppuccin Macchiato-inspired background colors."
-  (interactive)
-  (setq my/frame-bg-index
-        (mod (1+ my/frame-bg-index) (length my/frame-bg-colors)))
-  (let ((color (nth my/frame-bg-index my/frame-bg-colors)))
-    (set-frame-parameter (selected-frame) 'background-color color)
-    (message "Background: %s" color)))
-
-(global-set-key (kbd "C-c T") #'my/cycle-frame-background)
+(undelete-frame-mode 1)
 
 ;; -- Font ---------------------------------------------------
 (set-face-attribute 'default nil
@@ -112,13 +92,16 @@
   :init
   (setq evil-want-integration t)
   (setq evil-want-keybinding nil)
+  (setq evil-search-module 'evil-search)
   :config
   (evil-mode 1)
-  ;; (define-key evil-normal-state-map "H" 'my/next-buffer)
-  ;; (define-key evil-normal-state-map "L" 'my/prev-buffer)
   (define-key evil-normal-state-map "U" 'undo-redo)
   (global-set-key (kbd "C-=") #'global-text-scale-adjust)
-  (global-set-key (kbd "C--") #'global-text-scale-adjust))
+  (global-set-key (kbd "C--") #'global-text-scale-adjust)
+  (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
+  (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
+  (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
+  (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line))
 
 ;; 1. Make the normal/motion state maps act as high-priority intercepts
 (evil-make-intercept-map evil-normal-state-map)
@@ -153,9 +136,8 @@
 
 ;; -- Session/Workspace Persistence -------------------------
 (use-package perspective
-  :custom
-  (persp-mode-prefix-key (kbd "C-c x"))
   :config
+  (setq persp-suppress-no-prefix-key-warning t)
   (persp-mode 1)
   ;; Restores the "+" button on the tab bar
   (setq perspective-show-modestring nil)
@@ -172,30 +154,7 @@
 
 (with-eval-after-load 'perspective
   ;; Remove the perspective binding for '/' so Evil search can claim it
-  (define-key persp-mode-map (kbd "/") nil)
-  
-  ;; If you use the perspective prefix keymap (e.g., C-x x), ensure it's clear there too
-  (when (boundp 'perspective-map)
-    (define-key perspective-map (kbd "/") nil)))
-
-(defun my/frame-isolated-eshell (&optional arg)
-  "Open or create an Eshell buffer unique to the current frame.
-With a prefix ARG, prompts for a session name."
-  (interactive "P")
-  (let* ((frame-id (frame-parameter nil 'window-id))
-         (buf-name (format "*eshell-%s*" frame-id)))
-    (cond
-     (arg (call-interactively #'eshell))
-     (t (eshell buf-name)))))
-
-;; Update your helper function for project eshell spawning as well
-(defun my/project-eshell ()
-  "Open a frame-isolated Eshell in the current project root."
-  (interactive)
-  (let ((default-directory (if (fboundp 'projectile-project-root)
-                               (or (ignore-errors (projectile-project-root)) default-directory)
-                             default-directory)))
-    (my/frame-isolated-eshell)))
+  (define-key persp-mode-map (kbd "/") nil))
 
 (defun my/persp-kill-or-remove-current-buffer ()
   "Remove current buffer from the perspective and let perspective.el handle the global kill if unreferenced."
@@ -268,7 +227,6 @@ With a prefix ARG, prompts for a session name."
     ;; Top Level
     "SPC" '(find-file :which-key "Find file")
     ":"   '(execute-extended-command :which-key "M-x")
-    "."   '(find-file :which-key "Find file (cwd)")
     ","   '(my/switch-to-buffer :which-key "Switch buffer")
     "/"   '(grep :which-key "Search project")
     ";"   '(evilnc-comment-operator :which-key "Comment")
@@ -278,10 +236,6 @@ With a prefix ARG, prompts for a session name."
     "qq"  '(save-buffers-kill-terminal :which-key "Quit Emacs")
     "qs"  '(persp-state-save :which-key "Save session")
     "ql"  '(persp-state-load :which-key "Load session")
-    ;; "ql"  '((lambda () 
-    ;;          (interactive) 
-    ;;          (persp-state-load persp-state-default-file)) 
-    ;;        :which-key "Load session")
     "qr"  '(restart-emacs :which-key "Restart Emacs")
 
     ;; Files
@@ -308,6 +262,25 @@ With a prefix ARG, prompts for a session name."
                 (kill-buffer))
             (message "Buffer is not visiting a file!")))
         :which-key "Delete file")
+    "fy" '((lambda () (interactive)
+          (let ((path (buffer-file-name)))
+            (if path
+                (progn (kill-new path)
+                       (message "Copied: %s" path))
+              (message "Buffer has no file!"))))
+        :which-key "Yank file path")
+    "fY" '((lambda () (interactive)
+	    (let ((path (buffer-file-name)))
+		(if path
+		    (let ((win-path (replace-regexp-in-string
+				    "/" "\\\\"
+				    (replace-regexp-in-string
+				    "^/mnt/\\([a-z]\\)/" "\\1:\\\\"
+				    path))))
+		    (kill-new win-path)
+		    (message "Copied: %s" win-path))
+		(message "Buffer has no file!"))))
+	    :which-key "Yank Windows path")
 
     ;; Buffers
     "b"   '(:ignore t :which-key "buffers")
@@ -339,8 +312,8 @@ With a prefix ARG, prompts for a session name."
     "ss"  '(occur :which-key "Search buffer")
     "sg"  '(grep :which-key "Grep")
     "si"  '(imenu :which-key "Jump to symbol")
-    "sr" '(query-replace :which-key "Find & replace buffer")
-    "sR" '(project-query-replace-regexp :which-key "Find & replace project")
+    "sr"  '(query-replace :which-key "Find & replace buffer")
+    "sR"  '(project-query-replace-regexp :which-key "Find & replace project")
 
     ;; Help
     "h"   '(:ignore t :which-key "help")
@@ -352,26 +325,6 @@ With a prefix ARG, prompts for a session name."
     "hw"  '(woman :which-key "Man page (woman)")
     "hr"  '((lambda () (interactive) (load-file user-init-file)) :which-key "Reload config")
     "hy" '(my/yank-last-message :which-key "Yank last message")
-    "hb" '(my/cycle-frame-background :which-key "Cycle frame background color")
-    "fy" '((lambda () (interactive)
-          (let ((path (buffer-file-name)))
-            (if path
-                (progn (kill-new path)
-                       (message "Copied: %s" path))
-              (message "Buffer has no file!"))))
-        :which-key "Yank file path")
-    "fY" '((lambda () (interactive)
-	    (let ((path (buffer-file-name)))
-		(if path
-		    (let ((win-path (replace-regexp-in-string
-				    "/" "\\\\"
-				    (replace-regexp-in-string
-				    "^/mnt/\\([a-z]\\)/" "\\1:\\\\"
-				    path))))
-		    (kill-new win-path)
-		    (message "Copied: %s" win-path))
-		(message "Buffer has no file!"))))
-	    :which-key "Yank Windows path")
 
     ;; Code
     "c"   '(:ignore t :which-key "code")
@@ -393,9 +346,6 @@ With a prefix ARG, prompts for a session name."
     "cep" '(flymake-goto-prev-error :which-key "Prev error")
     "cel" '(flymake-show-buffer-diagnostics :which-key "List errors")
 
-    ;; Comments
-    "c;"  '(evilnc-comment-operator :which-key "Comment")
-
     ;; LSP (eglot)
     "l"   '(:ignore t :which-key "lsp")
     "ll"  '(eglot :which-key "Start LSP")
@@ -405,14 +355,6 @@ With a prefix ARG, prompts for a session name."
     "lq"  '(eglot-shutdown :which-key "Stop LSP")
     "ld"  '(flymake-show-buffer-diagnostics :which-key "Show diagnostics")
     "ly"  '(my/yank-flymake-error :which-key "Yank error message")
-
-    ;; Org / Calendar
-    "ca"   '(:ignore t :which-key "agenda")
-    "caa" '(org-agenda :which-key "Org agenda")
-    "cal" '(calendar :which-key "Calendar")
-    "cat"  '((lambda () (interactive)
-           (insert (format-time-string "<%Y-%m-%d %a %H:%M>")))
-         :which-key "Insert timestamp")
 
     ;; Global Search/Jump (SPC g)
     "g"   '(:ignore t :which-key "search/jump")
@@ -440,8 +382,6 @@ With a prefix ARG, prompts for a session name."
     ;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
     "ot"  '(term :which-key "Open term")
-    "oe"  '(my/frame-isolated-eshell :which-key "Open eshell")
-    "oE"  '(my/project-eshell :which-key "Open new eshell")
 
     ;; Notes
     "n"  '(org-capture :which-key "New note")
@@ -461,7 +401,6 @@ With a prefix ARG, prompts for a session name."
     "TAB o"    '(tab-bar-new-tab :which-key "New workspace")
     "TAB d"    '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
     "TAB r"    '(tab-bar-rename-tab :which-key "Rename workspace")
-
     )
 
   (doom-local-leader-keys
@@ -555,7 +494,6 @@ With a prefix ARG, prompts for a session name."
   (setq catppuccin-flavor 'macchiato)
   (load-theme 'catppuccin t))
 
-(undelete-frame-mode 1)
 
 ;; --- Two-Tier Workspace/Buffer Tabs ---
 (use-package tab-bar
@@ -638,10 +576,8 @@ With a prefix ARG, prompts for a session name."
 (use-package ox-gfm
   :after org
   :config
-
   (setq org-export-with-drawers t)
   (setq org-export-with-clocks t)
-
   (defun my/ox-gfm-fix-links (output backend info)
     "Strip Org anchor tags, fix TOC links, and inject LOGBOOK clock date in GFM export."
     (when (eq backend 'gfm)
@@ -691,6 +627,7 @@ With a prefix ARG, prompts for a session name."
   (set-face-attribute 'org-level-5 nil :height 1.0)
   (set-face-attribute 'org-document-title nil :height 1.6 :weight 'bold))
 
+;; -- Projectile ---------------------------------------------
 (use-package projectile
   :config
   (projectile-mode 1)
@@ -756,14 +693,6 @@ With a prefix ARG, prompts for a session name."
       '((sequence "TODO(t)" "PLANNING(p)" "IN-PROGRESS(i@/!)" "VERIFYING(v!)" "BLOCKED(b@)"  "|" "DONE(d!)" "OBE(o@!)" "WONT-DO(w@/!)" )
         ))
 
-;; Force the base label face to not interfere
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
-
 (setq org-modern-todo-faces
       '(
         ("TODO"        . (:background "GoldenRod"  :foreground "black" :weight bold))
@@ -814,22 +743,18 @@ With a prefix ARG, prompts for a session name."
 (use-package flyspell
   :ensure nil ; Built-in package
   :hook ((text-mode . flyspell-mode)
-         (prog-mode . flyspell-prog-mode)) ; Checks only comments/strings in code
+         (prog-mode . flyspell-prog-mode)
+         (org-capture-mode . flyspell-mode)) ; Enable in org-capture buffers
   :config
   (setq ispell-program-name "hunspell")
-  ;; Doom configuration optimizations for performance
+  ;; Optimizations
   (setq flyspell-issue-message-flag nil
         flyspell-issue-welcome-flag nil)
-
-  ;; Set the GLOBAL default dictionary (was ispell-local-dictionary — wrong var)
   (setq ispell-dictionary "en_US")
   (setq ispell-local-dictionary "en_US")
   (setq flyspell-default-dictionary "en_US")
-
-  ;; Configure hunspell dictionary alist
   (setq ispell-local-dictionary-alist
         '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8))))
-
 
 ;; -- Native Comp Warnings (suppress) -----------------------
 (setq native-comp-async-report-warnings-errors nil)
@@ -842,20 +767,6 @@ With a prefix ARG, prompts for a session name."
             (lambda ()
               (when (derived-mode-p 'term-mode 'eshell-mode)
                 (centered-cursor-mode -1)))))
-
-;; Prevent Emacs from treating side-window parents as un-splittable blocks
-(setq window-combination-resize t)
-
-;; --- Prevent Side Window Protection Crashes ---
-(defun my/disable-side-window-parameters (frame)
-  "Temporarily strip side window parameters during layout switches."
-  (window-skip-parameters (frame-selected-window frame)))
-
-;; Tell the tab-bar system to suspend side-window locking rules when shifting layouts
-(setq tab-bar-tab-to-frame-config-function #'my/disable-side-window-parameters)
-
-;; Ensure side-windows don't persist rigid splits across global tab adjustments
-(setq window-combination-resize t)
 
 ;; -- Vertico (vertical completion UI) ----------------------
 (use-package vertico
@@ -1006,29 +917,17 @@ With a prefix ARG, prompts for a session name."
     (slot . 3)
     (window-height . 0.2)))
 
-;; Make j/k move by visual lines not logical lines
-(with-eval-after-load 'evil
-  (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
-  (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
-  (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
-  (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
-  )
-
 ;; -- Rainbow Delimiters -------------------------------------
 (use-package rainbow-delimiters
-  :hook (prog-mode . rainbow-delimiters-mode)
-  :config
-  ;; Catppuccin Macchiato colors for each depth
-  (set-face-foreground 'rainbow-delimiters-depth-1-face  "#8aadf4") ; blue
-  (set-face-foreground 'rainbow-delimiters-depth-2-face  "#a6da95") ; green
-  (set-face-foreground 'rainbow-delimiters-depth-3-face  "#eed49f") ; yellow
-  (set-face-foreground 'rainbow-delimiters-depth-4-face  "#f5a97f") ; peach
-  (set-face-foreground 'rainbow-delimiters-depth-5-face  "#c6a0f6") ; mauve
-  (set-face-foreground 'rainbow-delimiters-depth-6-face  "#8bd5ca") ; teal
-  (set-face-foreground 'rainbow-delimiters-depth-7-face  "#ed8796") ; red
-  (set-face-foreground 'rainbow-delimiters-depth-8-face  "#f0c6c6") ; flamingo
-  (set-face-foreground 'rainbow-delimiters-depth-9-face  "#91d7e3") ; sky
-  (set-face-foreground 'rainbow-delimiters-unmatched-face "#ed8796")) ; red for unmatched
+  :hook (prog-mode . rainbow-delimiters-mode))
+
+;; Force the base label face to not interfere
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
 
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
@@ -1036,11 +935,11 @@ With a prefix ARG, prompts for a session name."
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(activities avy catppuccin-theme centered-cursor-mode evil-collection
-		evil-nerd-commenter evil-org evil-surround
-		flyspell-correct general imenu-list magit marginalia
-		minimap orderless org-modern org-superstar ox-gfm
-		perspective projectile rainbow-delimiters sublimity
-		tldr undo-history verilog-mode vertico)))
+   '(activities avy beframe catppuccin-theme centered-cursor-mode dash
+		evil-collection evil-nerd-commenter evil-org
+		evil-surround flyspell-correct general magit
+		marginalia orderless org-modern org-superstar ox-gfm
+		projectile rainbow-delimiters s tabspaces
+		tldr verilog-mode vertico)))
 
 
