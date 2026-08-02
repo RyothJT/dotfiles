@@ -114,6 +114,20 @@
 (define-key evil-motion-state-map (kbd "H") #'my/next-buffer)
 (define-key evil-motion-state-map (kbd "L") #'my/prev-buffer)
 
+(defun my/eshell-swap-return-keys ()
+  "Swap RET and C-RET at the input translation level in Eshell."
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map key-translation-map)
+    ;; Translate physical Enter -> C-RET
+    (define-key map (kbd "RET") (kbd "C-RET"))
+    (define-key map (kbd "<return>") (kbd "C-RET"))
+    ;; Translate physical Ctrl+Enter -> RET
+    (define-key map (kbd "C-RET") (kbd "RET"))
+    (define-key map (kbd "C-<return>") (kbd "RET"))
+    (setq-local key-translation-map map)))
+
+(add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
+
 ;; -- Evil Collection ----------------------------------------
 (use-package evil-collection
   :after evil
@@ -156,6 +170,25 @@
 (with-eval-after-load 'perspective
   ;; Remove the perspective binding for '/' so Evil search can claim it
   (define-key persp-mode-map (kbd "/") nil))
+
+(defun my/frame-isolated-eshell (&optional arg)
+  "Open or create an Eshell buffer unique to the current frame.
+With a prefix ARG, prompts for a session name."
+  (interactive "P")
+  (let* ((frame-id (frame-parameter nil 'window-id))
+         (buf-name (format "*eshell-%s*" frame-id)))
+    (cond
+     (arg (call-interactively #'eshell))
+     (t (eshell buf-name)))))
+
+;; Update your helper function for project eshell spawning as well
+(defun my/project-eshell ()
+  "Open a frame-isolated Eshell in the current project root."
+  (interactive)
+  (let ((default-directory (if (fboundp 'projectile-project-root)
+                               (or (ignore-errors (projectile-project-root)) default-directory)
+                             default-directory)))
+    (my/frame-isolated-eshell)))
 
 (defun my/persp-kill-or-remove-current-buffer ()
   "Remove current buffer from the perspective and let perspective.el handle the global kill if unreferenced."
@@ -383,6 +416,8 @@
     ;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
     "ot"  '(term :which-key "Open term")
+    "oe"  '(my/frame-isolated-eshell :which-key "Open eshell")
+    "oE"  '(my/project-eshell :which-key "Open new eshell")
 
     ;; Notes
     "n"  '(org-capture :which-key "New note")
