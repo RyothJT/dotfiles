@@ -40,6 +40,7 @@
 
 ;; Auto revert buffers, ask when modified
 (setq global-auto-revert-mode t)
+(save-place-mode 1)
 
 (undelete-frame-mode 1)
 
@@ -243,7 +244,7 @@
     "ff"  '(find-file :which-key "Find file")
     "fF"  '(project-find-file :which-key "Find file")
     "f/"  '(project-find-ripgrep :which-key "Find text in project")
-    "fr"  '(recent-open-files :which-key "Recent files")
+    "fh" '((lambda () (interactive) (find-file "~/")) :which-key "Find file from home")
     "fs"  '(save-buffer :which-key "Save file")
     "fS"  '(write-file :which-key "Save file as")
     "fd"  '(dired :which-key "Open dired")
@@ -848,6 +849,11 @@
 
 (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup)
 
+;; -- Powerline ----------------------------------------------
+(use-package powerline
+  :config
+  (powerline-default-theme))
+
 ;; -- Eglot + Verible (SystemVerilog LSP) -------------------
 (use-package eglot
   :hook (verilog-mode . eglot-ensure)
@@ -866,7 +872,6 @@
                                                    "\n")))
                               f))))))
   (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
-
 
 (with-eval-after-load 'magit (dolist (map (list magit-mode-map
                      magit-status-mode-map
@@ -939,7 +944,7 @@
 		evil-collection evil-nerd-commenter evil-org
 		evil-surround flyspell-correct general magit
 		marginalia orderless org-modern org-superstar ox-gfm
-		projectile rainbow-delimiters s tabspaces
+		powerline projectile rainbow-delimiters s tabspaces
 		tldr verilog-mode vertico)))
 
 
