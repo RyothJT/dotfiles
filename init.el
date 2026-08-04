@@ -31,9 +31,6 @@
 (setq initial-frame-alist '((width . 180) (height . 41)))
 (setq default-frame-alist initial-frame-alist)
 
-;; Maximize
-(add-to-list 'initial-frame-alist '(fullscreen . maximized))
-
 ;; Soft wrap + navigate visual lines (not logical lines)
 (global-visual-line-mode 1)
 (setq-default truncate-lines nil)
@@ -42,6 +39,9 @@
 (setq global-auto-revert-mode t)
 (save-place-mode 1)
 (undelete-frame-mode 1)
+
+;; ssh fix
+(setq tramp-inline-compress-start-size nil)  ;; disable inline compression
 
 ;; -- Tabs ---------------------------------------------------
 (global-tab-line-mode 1)
@@ -108,10 +108,18 @@
 (my/tab-line-override-mode 1)
 (add-to-list 'emulation-mode-map-alists
              `((my/tab-line-override-mode . ,my/tab-line-override-map)))
-;; Disable override mode inside minibuffers so H and L function normally
-(add-hook 'minibuffer-setup-hook
-          (lambda ()
-            (setq-local my/tab-line-override-mode nil)))
+
+;; Disable in insert mode, enable in all other evil states
+(add-hook 'evil-insert-state-entry-hook
+          (lambda () (my/tab-line-override-mode -1)))
+
+(add-hook 'evil-insert-state-exit-hook
+          (lambda () (my/tab-line-override-mode 1)))
+
+;; ;; Disable override mode inside minibuffers so H and L function normally
+;; (add-hook 'minibuffer-setup-hook
+;;           (lambda ()
+;;             (setq-local my/tab-line-override-mode nil)))
 
 ;; -- eshell fix --------------------------------------------
 (defun my/eshell-swap-return-keys ()
@@ -123,6 +131,7 @@
       (kbd "C-RET") #'newline
       (kbd "C-<return>") #'newline)))
 (add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
+(setq eshell-term-name "xterm-256color")
 
 ;; -- ripgrep -----------------------------------------------
 (use-package rg)
@@ -284,7 +293,7 @@
     "bb"  '(tabspaces-switch-to-buffer :which-key "Switch workspace buffer")
     "bB"  '(switch-to-buffer :which-key "Switch global buffer")
     "bi"  '(ibuffer :which-key "List all buffers")
-    "bd"  '((lambda () (interactive) (tabspaces-remove-selected-buffer (current-buffer))) :which-key "Remove current buffer from workspace")
+    "bd"  '(bury-buffer :which-key "Bury buffer")
     "bc"  '(tabspaces-remove-selected-buffer :which-key "Remove buffer from workspace")
     "bk"  '(kill-current-buffer :which-key "Remove buffer from workspace")
     "br"  '(revert-buffer :which-key "Revert buffer")
@@ -966,7 +975,8 @@
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
    '(avy catppuccin-theme centered-cursor-mode evil-collection
-	 evil-nerd-commenter evil-org evil-surround general magit
-	 marginalia orderless org-modern ox-gfm powerline projectile
-	 rainbow-delimiters rg tabspaces tldr vertico)))
+	 evil-nerd-commenter evil-org evil-surround flyspell-correct
+	 general imenu-list magit marginalia minimap orderless
+	 org-modern ox-gfm perspective powerline projectile
+	 rainbow-delimiters rg sublimity tabspaces tldr vertico vterm)))
 
