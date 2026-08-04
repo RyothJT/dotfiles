@@ -373,13 +373,20 @@ With a prefix ARG, prompts for a session name."
     "wf"  '(toggle-frame-fullscreen :which-key "Fullscreen")
     "wc"  '(delete-window :which-key "Delete current window")
 
+    ;; Spellchecking
+    "s"   '(:ignore t :which-key "spellcheck")
+    "st"  '(flyspell-mode :which-key "Toggle spellcheck")
+    "sb"  '(flyspell-buffer :which-key "Spellcheck buffer")
+    "sn"  '(flyspell-goto-next-error :which-key "Next spelling error")
+    "sc"  '(flyspell-correct-wrapper :which-key "Correct word at point")
+
     ;; Search
-    "s"   '(:ignore t :which-key "search")
-    "ss"  '(occur :which-key "Search buffer")
-    "sg"  '(grep :which-key "Grep")
-    "si"  '(imenu :which-key "Jump to symbol")
-    "sr"  '(query-replace :which-key "Find & replace buffer")
-    "sR"  '(project-query-replace-regexp :which-key "Find & replace project")
+    "S"   '(:ignore t :which-key "search")
+    "Ss"  '(occur :which-key "Search buffer")
+    "Sg"  '(grep :which-key "Grep")
+    "Si"  '(imenu :which-key "Jump to symbol")
+    "Sr"  '(query-replace :which-key "Find & replace buffer")
+    "SR"  '(project-query-replace-regexp :which-key "Find & replace project")
 
     ;; Help
     "h"   '(:ignore t :which-key "help")
@@ -448,27 +455,20 @@ With a prefix ARG, prompts for a session name."
     ;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
     "ot"  '(term :which-key "Open term")
-    "oe"  '(my/frame-isolated-eshell :which-key "Open eshell")
-    "oE"  '(my/project-eshell :which-key "Open new eshell")
+    "oe"  '(my/frame-isolated-eshell :which-key "Open new eshell")
+    "oE"  '(projectile-run-eshell :which-key "Open eshell in project")
 
     ;; Notes
     "n"  '(org-capture :which-key "New note")
 
-    ;; Spellchecking
-    "S"   '(:ignore t :which-key "spellcheck")
-    "St"  '(flyspell-mode :which-key "Toggle spellcheck")
-    "Sb"  '(flyspell-buffer :which-key "Spellcheck buffer")
-    "Sn"  '(flyspell-goto-next-error :which-key "Next spelling error")
-    "Sc"  '(flyspell-correct-wrapper :which-key "Correct word at point")
-
     ;; Workspaces (t)
-    "t"     '(:ignore t :which-key "workspaces")
+    "t"   '(:ignore t :which-key "workspaces")
     "tt"  '(tab-bar-switch-to-tab :which-key "Switch workspace")
-    "tl"    '(tab-bar-switch-to-next-tab :which-key "Next workspace")
-    "th"    '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
-    "to"    '(my/tab-bar-select-or-create :which-key "New workspace")
-    "td"    '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
-    "tr"    '(tab-bar-rename-tab :which-key "Rename workspace")
+    "tl"  '(tab-bar-switch-to-next-tab :which-key "Next workspace")
+    "th"  '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
+    "to"  '(my/tab-bar-select-or-create :which-key "New workspace")
+    "td"  '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
+    "tr"  '(tab-bar-rename-tab :which-key "Rename workspace")
     )
 
   (doom-local-leader-keys
