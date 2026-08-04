@@ -287,6 +287,7 @@
     "bd"  '((lambda () (interactive) (tabspaces-remove-selected-buffer (current-buffer))) :which-key "Remove current buffer from workspace")
     "bc"  '(tabspaces-remove-selected-buffer :which-key "Remove buffer from workspace")
     "bk"  '(kill-current-buffer :which-key "Remove buffer from workspace")
+    "br"  '(revert-buffer :which-key "Revert buffer")
     "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
 
     ;; Windows
@@ -689,6 +690,26 @@
      :empty-lines 0))
     )
 
+;; -- Backups ------------------------------------------------
+(setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
+(setq make-backup-files t)   ;; keep making backups
+(setq version-control t)     ;; use numbered backups (file.~1~, file.~2~, ...)
+(setq delete-old-versions t) ;; auto-delete old numbered backups
+(setq kept-new-versions 6)
+(setq kept-old-versions 2)
+(setq auto-save-file-name-transforms
+      `((".*" "~/.emacs.d/auto-save/" t)))
+
+;; -- Org Export Directory -----------------------------------
+(setq org-export-output-file-name-function
+      (lambda (extension &optional subtreep pub-dir)
+        (expand-file-name
+         (concat (file-name-base (buffer-file-name)) extension)
+         (let ((dir (expand-file-name "~/org/export/")))
+           (unless (file-exists-p dir)
+             (make-directory dir t))
+           dir))))
+
 ;; TODO states
 (setq org-todo-keywords
       '((sequence "TODO(t)" "PLANNING(p)" "IN-PROGRESS(i@/!)" "VERIFYING(v!)" "BLOCKED(b@)"  "|" "DONE(d!)" "OBE(o@!)" "WONT-DO(w@/!)" )
@@ -944,11 +965,8 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(activities avy beframe catppuccin-theme centered-cursor-mode dash
-		evil-collection evil-nerd-commenter evil-org
-		evil-surround flyspell-correct general magit
-		marginalia orderless org-modern org-superstar ox-gfm
-		powerline projectile rainbow-delimiters rg s
-		tab-spaces tabspaces tldr verilog-mode vertico)))
-
+   '(avy catppuccin-theme centered-cursor-mode evil-collection
+	 evil-nerd-commenter evil-org evil-surround general magit
+	 marginalia orderless org-modern ox-gfm powerline projectile
+	 rainbow-delimiters rg tabspaces tldr vertico)))
 
