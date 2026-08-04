@@ -41,7 +41,6 @@
 ;; Auto revert buffers, ask when modified
 (setq global-auto-revert-mode t)
 (save-place-mode 1)
-
 (undelete-frame-mode 1)
 
 ;; -- Tabs ---------------------------------------------------
@@ -124,6 +123,9 @@
       (kbd "C-RET") #'newline
       (kbd "C-<return>") #'newline)))
 (add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
+
+;; -- ripgrep -----------------------------------------------
+(use-package rg)
 
 ;; -- Session/Workspace Persistence -------------------------
 (use-package tabspaces
@@ -250,15 +252,15 @@ With a prefix ARG, prompts for a session name."
         (message "Copied: %s" msg))
     (message "No diagnostic at point.")))
 
-;; Yank last minibuffer message to clipboard
-(defun my/yank-last-message ()
-  "Copy the last message from the minibuffer to clipboard."
+(defun my/yank-last-five-messages ()
+  "Copy the last 5 messages from the *Messages* buffer to the clipboard."
   (interactive)
-  (let ((msg (current-message)))
-    (if msg
-        (progn (kill-new msg)
-               (message "Copied: %s" msg))
-      (message "No message to copy."))))
+  (let ((msgs (with-current-buffer "*Messages*"
+                (buffer-substring-no-properties
+                 (save-excursion (goto-char (point-max)) (forward-line -5) (point))
+                 (point-max)))))
+    (kill-new msgs)
+    (message "Copied last 5 messages.")))
 
 (defun my/switch-to-buffer ()
   "Switch to a perspective buffer, filtering out special buffers."
@@ -294,9 +296,7 @@ With a prefix ARG, prompts for a session name."
     ;; Top Level
     "SPC" '(find-file :which-key "Find file")
     ":"   '(execute-extended-command :which-key "M-x")
-    ","   '(my/switch-to-buffer :which-key "Switch buffer")
     "/"   '(grep :which-key "Search project")
-    ";"   '(evilnc-comment-operator :which-key "Comment")
 
     ;; Quit / Session
     "q"   '(:ignore t :which-key "quit/session")
@@ -309,7 +309,7 @@ With a prefix ARG, prompts for a session name."
     "f"   '(:ignore t :which-key "files")
     "ff"  '(find-file :which-key "Find file")
     "fF"  '(project-find-file :which-key "Find file")
-    "f/"  '(project-find-ripgrep :which-key "Find text in project")
+    "f/"  '(projectile-ripgrep :which-key "Find text in project")
     "fh" '((lambda () (interactive) (find-file "~/")) :which-key "Find file from home")
     "fs"  '(save-buffer :which-key "Save file")
     "fS"  '(write-file :which-key "Save file as")
@@ -354,9 +354,9 @@ With a prefix ARG, prompts for a session name."
     "bb"  '(tabspaces-switch-to-buffer :which-key "Switch workspace buffer")
     "bB"  '(switch-to-buffer :which-key "Switch global buffer")
     "bi"  '(ibuffer :which-key "List all buffers")
-    "bd"  '(tabspaces-remove-selected-buffer :which-key "Remove buffer from workspace")
+    "bd"  '((lambda () (interactive) (tabspaces-remove-selected-buffer (current-buffer))) :which-key "Remove current buffer from workspace")
     "bc"  '(tabspaces-remove-selected-buffer :which-key "Remove buffer from workspace")
-    "bn"  '(next-buffer :which-key "Next buffer")
+    "bk"  '(kill-current-buffer :which-key "Remove buffer from workspace")
     "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
 
     ;; Windows
@@ -390,7 +390,7 @@ With a prefix ARG, prompts for a session name."
     "ha"  '(apropos-command :which-key "Find commands")
     "hw"  '(woman :which-key "Man page (woman)")
     "hr"  '((lambda () (interactive) (load-file user-init-file)) :which-key "Reload config")
-    "hy" '(my/yank-last-message :which-key "Yank last message")
+    "hy"  '(my/yank-last-five-messages :which-key "Yank last message")
 
     ;; Code
     "c"   '(:ignore t :which-key "code")
@@ -562,6 +562,14 @@ With a prefix ARG, prompts for a session name."
   (setq catppuccin-flavor 'macchiato)
   (load-theme 'catppuccin t))
 
+;; -- SPC overrides ------------------------------------------
+(with-eval-after-load 'dired
+  (general-def :states 'normal :keymaps 'dired-mode-map
+    "SPC" general-override-mode-map))
+
+(with-eval-after-load 'help-mode
+  (general-def :states 'normal :keymaps 'help-mode-map
+    "SPC" general-override-mode-map))
 
 ;; --- Two-Tier Workspace/Buffer Tabs ---
 (use-package tab-bar
@@ -940,6 +948,7 @@ With a prefix ARG, prompts for a session name."
                               f))))))
   (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
 
+;; -- magit overrides --------------------------------------
 (with-eval-after-load 'magit (dolist (map (list magit-mode-map
                      magit-status-mode-map
                      magit-log-mode-map
@@ -947,10 +956,16 @@ With a prefix ARG, prompts for a session name."
                      magit-refs-mode-map
                      magit-revision-mode-map))
     (define-key map (kbd "SPC") nil))
-  
-  ;; Also unbind from evil-collection's magit bindings
+  (general-def :states 'normal :keymaps 'magit-mode-map
+    "<escape>" #'magit-mode-bury-buffer)
   (evil-define-key '(normal visual motion) magit-mode-map
     (kbd "SPC") nil))
+(with-eval-after-load 'transient
+  (general-def :keymaps 'transient-base-map
+    "<escape>" #'transient-quit-one))
+(with-eval-after-load 'git-commit
+  (general-def :states 'normal :keymaps 'git-commit-mode-map
+    "<escape>" #'with-editor-cancel))
 
 ;; These give the most speed with least feature loss
 (setq vc-handled-backends nil)          ; safe, magit replaces this anyway
@@ -1011,7 +1026,7 @@ With a prefix ARG, prompts for a session name."
 		evil-collection evil-nerd-commenter evil-org
 		evil-surround flyspell-correct general magit
 		marginalia orderless org-modern org-superstar ox-gfm
-		powerline projectile rainbow-delimiters s tab-spaces
-		tabspaces tldr verilog-mode vertico)))
+		powerline projectile rainbow-delimiters rg s
+		tab-spaces tabspaces tldr verilog-mode vertico)))
 
 
