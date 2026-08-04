@@ -21,7 +21,7 @@
 ;; -- UI -----------------------------------------------------
 (menu-bar-mode -1)
 (tool-bar-mode -1)
-(scroll-bar-mode -1)
+(scroll-bar-mode t)
 (setq display-line-numbers-type 'relative)
 (global-display-line-numbers-mode 1)
 (add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
@@ -38,8 +38,6 @@
 (global-visual-line-mode 1)
 (setq-default truncate-lines nil)
 
-<<<<<<< Updated upstream
-=======
 ;; Auto revert buffers, ask when modified
 (setq global-auto-revert-mode t)
 (save-place-mode 1)
@@ -53,7 +51,6 @@
 ;; Built-in buffer exclusion matching regex pattern for '*' buffers
 (setq tab-line-exclude-buffers '("\\`\\*.*\\*'"))
 
->>>>>>> Stashed changes
 ;; -- Font ---------------------------------------------------
 (set-face-attribute 'default nil
   :font "JetBrains Mono"
@@ -62,60 +59,16 @@
 ;; Fallback for unicode characters
 (set-fontset-font t 'unicode "Noto Sans" nil 'append)
 
-<<<<<<< Updated upstream
-;; -- Skip special buffers with H/L -------------------------
-(defun my/next-buffer ()
-  "Go to next buffer, strictly honoring frame isolation and ignoring internal ones."
-  (interactive)
-  (let* ((start (current-buffer))
-         (frame (selected-frame))
-         ;; Get the exact, current list of buffers assigned to this frame
-         (frame-buffers (frame-parameter frame 'buffer-list)))
-    (next-buffer)
-    (while (and (or (string-match-p "^\\*" (buffer-name))
-                    (not (memq (current-buffer) frame-buffers)))
-                (not (eq (current-buffer) start)))
-      (next-buffer))))
-
-(defun my/prev-buffer ()
-  "Go to previous buffer, strictly honoring frame isolation and ignoring internal ones."
-  (interactive)
-  (let* ((start (current-buffer))
-         (frame (selected-frame))
-         ;; Get the exact, current list of buffers assigned to this frame
-         (frame-buffers (frame-parameter frame 'buffer-list)))
-    (previous-buffer)
-    (while (and (or (string-match-p "^\\*" (buffer-name))
-                    (not (memq (current-buffer) frame-buffers)))
-                (not (eq (current-buffer) start)))
-      (previous-buffer))))
-
-=======
->>>>>>> Stashed changes
 ;; -- Evil Mode ----------------------------------------------
 (use-package evil
   :init
   (setq evil-want-integration t)
   (setq evil-want-keybinding nil)
+  (setq evil-search-module 'evil-search)
   :config
   (evil-mode 1)
-  ;; (define-key evil-normal-state-map "H" 'my/next-buffer)
-  ;; (define-key evil-normal-state-map "L" 'my/prev-buffer)
   (define-key evil-normal-state-map "U" 'undo-redo)
   (global-set-key (kbd "C-=") #'global-text-scale-adjust)
-<<<<<<< Updated upstream
-  (global-set-key (kbd "C--") #'global-text-scale-adjust))
-
-;; 1. Make the normal/motion state maps act as high-priority intercepts
-(evil-make-intercept-map evil-normal-state-map)
-(evil-make-intercept-map evil-motion-state-map)
-
-;; 2. Bind your universal buffer navigation keys
-(define-key evil-normal-state-map (kbd "H") #'my/next-buffer)
-(define-key evil-normal-state-map (kbd "L") #'my/prev-buffer)
-(define-key evil-motion-state-map (kbd "H") #'my/next-buffer)
-(define-key evil-motion-state-map (kbd "L") #'my/prev-buffer)
-=======
   (global-set-key (kbd "C--") #'global-text-scale-adjust)
   (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
   (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
@@ -123,7 +76,6 @@
   (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
 (evil-make-intercept-map evil-normal-state-map)
 (evil-make-intercept-map evil-motion-state-map))
->>>>>>> Stashed changes
 
 ;; -- Evil Collection ----------------------------------------
 (use-package evil-collection
@@ -174,12 +126,6 @@
 (add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
 
 ;; -- Session/Workspace Persistence -------------------------
-<<<<<<< Updated upstream
-(require 'desktop)
-(desktop-save-mode 1)
-(setq desktop-auto-save-timeout 30)
-(setq desktop-restore-eager 5)
-=======
 (use-package tabspaces
   :ensure t
   :init
@@ -253,38 +199,10 @@
 ;;   (setq persp-state-default-file (expand-file-name "persp-state" user-emacs-directory))
 ;;   ;; Auto-save your workspaces and buffers on exit
 ;;   (add-hook 'kill-emacs-hook #'persp-state-save))
->>>>>>> Stashed changes
 
-;; 1. Tell the desktop engine how to save Eshell buffers cleanly without a file
-(defun my/desktop-save-eshell (_desktop-dirname)
-  "Save the directory state of an eshell buffer to the desktop file safely."
-  (cons default-directory nil))
-
-;; 2. Define the restoration handler with proper argument matching
-(defun my/restore-eshell-handler (_buffer-file-name buffer-name misc)
-  "Safely reconstruct the eshell buffer using its saved directory context."
-  (let ((dir (car misc))
-        (buf (get-buffer-create buffer-name)))
-    (with-current-buffer buf
-      (when dir (setq default-directory dir))
-      ;; Initialize eshell environment cleanly without blocking startup
-      (unless (derived-mode-p 'eshell-mode)
-        (eshell-mode)))
-    buf))
-
-;; 3. Register everything safely after the desktop library finishes loading
-(with-eval-after-load 'desktop
-  ;; Map the save and restore routines to eshell-mode
-  (add-to-list 'desktop-buffer-mode-handlers '(eshell-mode . my/restore-eshell-handler))
-  
-  ;; Modify the exclusion filter so it doesn't discard *eshell* buffers
-  (setq desktop-buffers-not-to-save 
-        "\\(^\\([^\\*[:nonascii:]]\\|\\*\\(scratch\\|Messages\\)\\*\\)$\\)"))
-
-;; 4. Hook the custom saver directly into every active Eshell buffer
-(add-hook 'eshell-mode-hook
-          (lambda ()
-            (setq-local desktop-save-buffer 'my/desktop-save-eshell)))
+(with-eval-after-load 'perspective
+  ;; Remove the perspective binding for '/' so Evil search can claim it
+  (define-key persp-mode-map (kbd "/") nil))
 
 (defun my/frame-isolated-eshell (&optional arg)
   "Open or create an Eshell buffer unique to the current frame.
@@ -305,44 +223,22 @@ With a prefix ARG, prompts for a session name."
                              default-directory)))
     (my/frame-isolated-eshell)))
 
-(defun my/beframe-unassume-current-buffer ()
-  "Unassume the current buffer from the frame and switch to another frame buffer.
-If the buffer is not assumed by any other open frame, it is killed globally."
+(defun my/persp-kill-or-remove-current-buffer ()
+  "Remove current buffer from the perspective and let perspective.el handle the global kill if unreferenced."
   (interactive)
   (let* ((buf (current-buffer))
-         (frame (selected-frame))
-         (remaining (beframe-buffer-list frame)))
-    (if (> (length remaining) 1)
-        (let ((chosen nil))
-          ;; 1. Directly remove the buffer from the current frame's local list
-          (set-frame-parameter 
-           frame 'buffer-list 
-           (delq buf (frame-parameter frame 'buffer-list)))
-          ;; 2. Find the next valid buffer that doesn't start with "*"
-          (dolist (b remaining)
-            (when (and (not chosen)
-                       (not (eq b buf))
-                       (not (string-match-p "^\\*" (buffer-name b))))
-              (setq chosen b)))
-          ;; 3. Switch to the new candidate or fallback safely
-          (if chosen
-              (switch-to-buffer chosen)
-            (let ((next-fallback (car (delq buf remaining))))
-              (if next-fallback
-                  (switch-to-buffer next-fallback)
-                (switch-to-buffer "*scratch*"))))
-          ;; 4. If no other frame assumes this buffer, kill it globally
-          (let ((assumed-elsewhere nil))
-            (dolist (f (frame-list))
-              (unless (eq f frame)
-                (when (memq buf (frame-parameter f 'buffer-list))
-                  (setq assumed-elsewhere t))))
-            (unless assumed-elsewhere
-              (kill-buffer buf))))
-      ;; Fallback if it is the last buffer in the frame
-      (unless (string-equal (buffer-name buf) "*scratch*")
-        (switch-to-buffer "*scratch*")
-        (kill-buffer buf)))))
+         (buf-name (buffer-name buf))
+         ;; Gather other valid user buffers in this perspective
+         (all-buffers (persp-current-buffer-names))
+         (clean-list (cl-remove-if (lambda (name) (string-match-p "^\\*" name)) all-buffers))
+         (sibling-user-buffers (cl-remove buf-name clean-list :test #'string-equal))
+         (target-fallback (car sibling-user-buffers)))
+    ;; 1. Evacuate the window safely within local isolation bounds first
+    (if target-fallback
+        (switch-to-buffer target-fallback)
+      (switch-to-buffer "*scratch*"))
+    ;; 2. Hand off the target buffer to perspective's internal reference engine
+    (persp-remove-buffer buf)))
 
 ;; -- Yank Flymake Error at Point ----------------------------
 (defun my/yank-flymake-error ()
@@ -365,10 +261,11 @@ If the buffer is not assumed by any other open frame, it is killed globally."
       (message "No message to copy."))))
 
 (defun my/switch-to-buffer ()
-  "Switch to a buffer, filtering out special buffers."
+  "Switch to a perspective buffer, filtering out special buffers."
   (interactive)
   (let ((completion-regexp-list (cons "^[^*]" completion-regexp-list)))
-    (call-interactively #'switch-to-buffer)))
+    (persp-switch-to-buffer* 
+     (persp-read-buffer "Switch to buffer: " nil t))))
 
 (defun my/safely-close-workspace ()
   "Prompt the user to explicitly confirm before destroying the active workspace."
@@ -397,7 +294,6 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     ;; Top Level
     "SPC" '(find-file :which-key "Find file")
     ":"   '(execute-extended-command :which-key "M-x")
-    "."   '(find-file :which-key "Find file (cwd)")
     ","   '(my/switch-to-buffer :which-key "Switch buffer")
     "/"   '(grep :which-key "Search project")
     ";"   '(evilnc-comment-operator :which-key "Comment")
@@ -405,11 +301,7 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     ;; Quit / Session
     "q"   '(:ignore t :which-key "quit/session")
     "qq"  '(save-buffers-kill-terminal :which-key "Quit Emacs")
-<<<<<<< Updated upstream
-    "qs"  '(desktop-save-in-desktop-dir :which-key "Save session")
-=======
     "qs"  '(desktop-save :which-key "Save session")
->>>>>>> Stashed changes
     "ql"  '(desktop-read :which-key "Load session")
     "qr"  '(restart-emacs :which-key "Restart Emacs")
 
@@ -418,7 +310,7 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     "ff"  '(find-file :which-key "Find file")
     "fF"  '(project-find-file :which-key "Find file")
     "f/"  '(project-find-ripgrep :which-key "Find text in project")
-    "fr"  '(recent-open-files :which-key "Recent files")
+    "fh" '((lambda () (interactive) (find-file "~/")) :which-key "Find file from home")
     "fs"  '(save-buffer :which-key "Save file")
     "fS"  '(write-file :which-key "Save file as")
     "fd"  '(dired :which-key "Open dired")
@@ -437,58 +329,6 @@ If the buffer is not assumed by any other open frame, it is killed globally."
                 (kill-buffer))
             (message "Buffer is not visiting a file!")))
         :which-key "Delete file")
-
-    ;; Buffers
-    "b"   '(:ignore t :which-key "buffers")
-    "bb"  '(my/switch-to-buffer :which-key "Switch buffer")
-    "bi"  '(ibuffer :which-key "List all buffers")
-    "bd"  '(my/beframe-unassume-current-buffer :which-key "Remove buffer from frame")
-    "bc"  '(my/beframe-unassume-current-buffer :which-key "Remove buffer from frame")
-    "bn"  '(next-buffer :which-key "Next buffer")
-    "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
-    "bp"  '(previous-buffer :which-key "Prev buffer")
-    "br"  '(revert-buffer :which-key "Revert buffer")
-
-    ;; Windows
-    "w"   '(:ignore t :which-key "windows")
-    "wv"  '(split-window-right :which-key "Split vertical")
-    "ws"  '(split-window-below :which-key "Split horizontal")
-    "ww"  '(other-window :which-key "Other window")
-    "wo"  '(delete-other-windows :which-key "Delete other windows")
-    "wh"  '(windmove-left :which-key "Window left")
-    "wl"  '(windmove-right :which-key "Window right")
-    "wk"  '(windmove-up :which-key "Window up")
-    "wj"  '(windmove-down :which-key "Window down")
-    "wm" '(toggle-frame-maximized :which-key "Maximize frame")
-    "wf" '(toggle-frame-fullscreen :which-key "Fullscreen")
-
-    ;; Window Close/Delete Sub-menu (SPC w c)
-    "wc"  '(:ignore t :which-key "close/delete")
-    "wcc" '(delete-window :which-key "Delete current window")
-    "wco" '(delete-other-windows :which-key "Delete other windows (maximize)")
-    "wch" '(windmove-delete-left :which-key "Delete window left")
-    "wcj" '(windmove-delete-down :which-key "Delete window below")
-    "wck" '(windmove-delete-up :which-key "Delete window above")
-    "wcl" '(windmove-delete-right :which-key "Delete window right")
-
-    ;; Search
-    "s"   '(:ignore t :which-key "search")
-    "ss"  '(occur :which-key "Search buffer")
-    "sg"  '(grep :which-key "Grep")
-    "si"  '(imenu :which-key "Jump to symbol")
-    "sr" '(query-replace :which-key "Find & replace buffer")
-    "sR" '(project-query-replace-regexp :which-key "Find & replace project")
-
-    ;; Help
-    "h"   '(:ignore t :which-key "help")
-    "hk"  '(describe-key :which-key "Describe key")
-    "hf"  '(describe-function :which-key "Describe function")
-    "hv"  '(describe-variable :which-key "Describe variable")
-    "hm"  '(describe-mode :which-key "Describe mode")
-    "ha"  '(apropos-command :which-key "Find commands")
-    "hw"  '(woman :which-key "Man page (woman)")
-    "hr"  '((lambda () (interactive) (load-file user-init-file)) :which-key "Reload config")
-    "hy" '(my/yank-last-message :which-key "Yank last message")
     "fy" '((lambda () (interactive)
           (let ((path (buffer-file-name)))
             (if path
@@ -508,6 +348,49 @@ If the buffer is not assumed by any other open frame, it is killed globally."
 		    (message "Copied: %s" win-path))
 		(message "Buffer has no file!"))))
 	    :which-key "Yank Windows path")
+
+    ;; Buffers
+    "b"   '(:ignore t :which-key "buffers")
+    "bb"  '(tabspaces-switch-to-buffer :which-key "Switch workspace buffer")
+    "bB"  '(switch-to-buffer :which-key "Switch global buffer")
+    "bi"  '(ibuffer :which-key "List all buffers")
+    "bd"  '(tabspaces-remove-selected-buffer :which-key "Remove buffer from workspace")
+    "bc"  '(tabspaces-remove-selected-buffer :which-key "Remove buffer from workspace")
+    "bn"  '(next-buffer :which-key "Next buffer")
+    "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
+
+    ;; Windows
+    "w"   '(:ignore t :which-key "windows")
+    "wv"  '(split-window-right :which-key "Split vertical")
+    "ws"  '(split-window-below :which-key "Split horizontal")
+    "ww"  '(other-window :which-key "Other window")
+    "wo"  '(delete-other-windows :which-key "Delete other windows")
+    "wh"  '(windmove-left :which-key "Window left")
+    "wl"  '(windmove-right :which-key "Window right")
+    "wk"  '(windmove-up :which-key "Window up")
+    "wj"  '(windmove-down :which-key "Window down")
+    "wm"  '(toggle-frame-maximized :which-key "Maximize frame")
+    "wf"  '(toggle-frame-fullscreen :which-key "Fullscreen")
+    "wc"  '(delete-window :which-key "Delete current window")
+
+    ;; Search
+    "s"   '(:ignore t :which-key "search")
+    "ss"  '(occur :which-key "Search buffer")
+    "sg"  '(grep :which-key "Grep")
+    "si"  '(imenu :which-key "Jump to symbol")
+    "sr"  '(query-replace :which-key "Find & replace buffer")
+    "sR"  '(project-query-replace-regexp :which-key "Find & replace project")
+
+    ;; Help
+    "h"   '(:ignore t :which-key "help")
+    "hk"  '(describe-key :which-key "Describe key")
+    "hf"  '(describe-function :which-key "Describe function")
+    "hv"  '(describe-variable :which-key "Describe variable")
+    "hm"  '(describe-mode :which-key "Describe mode")
+    "ha"  '(apropos-command :which-key "Find commands")
+    "hw"  '(woman :which-key "Man page (woman)")
+    "hr"  '((lambda () (interactive) (load-file user-init-file)) :which-key "Reload config")
+    "hy" '(my/yank-last-message :which-key "Yank last message")
 
     ;; Code
     "c"   '(:ignore t :which-key "code")
@@ -529,9 +412,6 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     "cep" '(flymake-goto-prev-error :which-key "Prev error")
     "cel" '(flymake-show-buffer-diagnostics :which-key "List errors")
 
-    ;; Comments
-    "c;"  '(evilnc-comment-operator :which-key "Comment")
-
     ;; LSP (eglot)
     "l"   '(:ignore t :which-key "lsp")
     "ll"  '(eglot :which-key "Start LSP")
@@ -541,14 +421,6 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     "lq"  '(eglot-shutdown :which-key "Stop LSP")
     "ld"  '(flymake-show-buffer-diagnostics :which-key "Show diagnostics")
     "ly"  '(my/yank-flymake-error :which-key "Yank error message")
-
-    ;; Org / Calendar
-    "ca"   '(:ignore t :which-key "agenda")
-    "caa" '(org-agenda :which-key "Org agenda")
-    "cal" '(calendar :which-key "Calendar")
-    "cat"  '((lambda () (interactive)
-           (insert (format-time-string "<%Y-%m-%d %a %H:%M>")))
-         :which-key "Insert timestamp")
 
     ;; Global Search/Jump (SPC g)
     "g"   '(:ignore t :which-key "search/jump")
@@ -575,6 +447,7 @@ If the buffer is not assumed by any other open frame, it is killed globally."
 
     ;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
+    "ot"  '(term :which-key "Open term")
     "oe"  '(my/frame-isolated-eshell :which-key "Open eshell")
     "oE"  '(my/project-eshell :which-key "Open new eshell")
 
@@ -588,15 +461,14 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     "Sn"  '(flyspell-goto-next-error :which-key "Next spelling error")
     "Sc"  '(flyspell-correct-wrapper :which-key "Correct word at point")
 
-    ;; Workspaces (TAB)
-    "TAB"     '(:ignore t :which-key "workspaces")
-    "TAB TAB"  '(tab-bar-switch-to-tab :which-key "Switch workspace")
-    "TAB l"    '(tab-bar-switch-to-next-tab :which-key "Next workspace")
-    "TAB h"    '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
-    "TAB o"    '(my/tab-bar-select-or-create :which-key "New workspace")
-    "TAB d"    '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
-    "TAB r"    '(tab-bar-rename-tab :which-key "Rename workspace")
-
+    ;; Workspaces (t)
+    "t"     '(:ignore t :which-key "workspaces")
+    "tt"  '(tab-bar-switch-to-tab :which-key "Switch workspace")
+    "tl"    '(tab-bar-switch-to-next-tab :which-key "Next workspace")
+    "th"    '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
+    "to"    '(my/tab-bar-select-or-create :which-key "New workspace")
+    "td"    '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
+    "tr"    '(tab-bar-rename-tab :which-key "Rename workspace")
     )
 
   (doom-local-leader-keys
@@ -690,21 +562,56 @@ If the buffer is not assumed by any other open frame, it is killed globally."
   (setq catppuccin-flavor 'macchiato)
   (load-theme 'catppuccin t))
 
-;; -- Frame isolation ----------------------------------------
-(use-package beframe
-  :init
-  (beframe-mode 1)
-  :custom
-  ;; Automatically un-isolate global/scratch buffers so you can always see them
-  (beframe-global-buffers '("*scratch*" "*Messages*" "*Help*")))
 
-(undelete-frame-mode 1)
+;; --- Two-Tier Workspace/Buffer Tabs ---
+(use-package tab-bar
+  :ensure nil
+  :init
+  (tab-bar-mode 1)
+  :custom
+  (tab-bar-new-tab-to 'rightmost)
+  :config
+  ;; --- Enhance Active Tab Visibility ---
+  (with-eval-after-load 'catppuccin-theme
+    (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
+          (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
+          (bg-inactive  "#24273a")  ; Macchiato Surface
+          (fg-inactive  "#cad3f5")) ; Macchiato Text
+      ;; Styling for the currently active tab
+      (set-face-attribute 'tab-bar-tab nil
+                          :background bg-active
+                          :foreground fg-active
+                          :weight 'bold
+                          :box `(:line-width (6 . 3) :color ,bg-active))
+      ;; Styling for all inactive tabs
+      (set-face-attribute 'tab-bar-tab-inactive nil
+                          :background bg-inactive
+                          :foreground fg-inactive
+                          :weight 'normal
+                          :box `(:line-width (6 . 3) :color ,bg-inactive))
+      ;; Styling for the empty remaining space behind the tabs
+      (set-face-attribute 'tab-bar nil
+                          :background "#181926" ; Darker crust color
+                          :foreground fg-inactive))))
 
 ;; -- tldr ---------------------------------------------------
 (use-package tldr)
 
 ;; -- Org Mode -----------------------------------------------
 (setq org-directory "~/org")
+
+;; With use-package + straight or elpaca:
+(use-package org-modern
+  :hook (org-mode . org-modern-mode)
+  :custom
+  (org-modern-star '("◉" "○" "◆" "◇" "▶"))   ; custom heading bullets
+  (org-modern-list '((?- . "•") (?+ . "◦") (?* . "▸")))  ; list markers
+  (org-modern-checkbox '((?  . "☐") (?X . "☑") (?- . "◫")))
+  (org-modern-table t)
+  (org-modern-block-name t))
+
+(setq org-hide-leading-stars t)
+(setq org-startup-indented t)
 
 (defun my/auto-insert-org-template ()
   "Insert default Org header if new .org file is empty."
@@ -734,9 +641,50 @@ If the buffer is not assumed by any other open frame, it is killed globally."
 (with-eval-after-load 'org
   (define-key org-mode-map (kbd "DEL") #'my/org-smart-backspace))
 
-;; Enable Markdown export safely via use-package
 (use-package ox-gfm
-  :after org)
+  :after org
+  :config
+  (setq org-export-with-drawers t)
+  (setq org-export-with-clocks t)
+  (defun my/ox-gfm-fix-links (output backend info)
+    "Strip Org anchor tags, fix TOC links, and inject LOGBOOK clock date in GFM export."
+    (when (eq backend 'gfm)
+      ;; Remove <a id="orgXXX"></a> anchors
+      (setq output (replace-regexp-in-string
+                    "<a id=\"org[^\"]*\"></a>\n?" "" output))
+      ;; Convert [Title](#orgXXX) → plain text
+      (setq output (replace-regexp-in-string
+                    "\\[\\([^]]+\\)\\](#org[a-z0-9]+)" "\\1" output))
+      ;; Parse LOGBOOK from source buffer and inject date under matching headings
+      (with-current-buffer (plist-get info :input-buffer)
+        (org-element-map (org-element-parse-buffer) 'headline
+          (lambda (hl)
+            (let* ((title (org-element-property :raw-value hl))
+                   (drawer (car (org-element-map hl 'drawer
+                                  (lambda (d)
+                                    (when (string= (org-element-property :drawer-name d)
+                                                   "LOGBOOK")
+                                      d))
+                                  nil t)))
+                   (clock-el (when drawer
+                               (car (org-element-map drawer 'clock #'identity nil t))))
+                   (ts (when clock-el
+                         (org-element-property :value clock-el)))
+                   (date-str (when ts
+                               (format-time-string
+                                "%Y-%m-%d %A"
+                                (encode-time
+                                 (org-parse-time-string
+                                  (org-element-property :raw-value ts)))))))
+              (when (and title date-str)
+                (setq output
+                      (replace-regexp-in-string
+                       (concat "\\(^#+ " (regexp-quote title) "$\\)")
+                       (concat "\\1\n\n**Date:** " date-str)
+                       output)))))))
+      output))
+  (add-to-list 'org-export-filter-final-output-functions
+               #'my/ox-gfm-fix-links))
 
 ;; -- Org Mode Header Sizes ----------------------------------
 (with-eval-after-load 'org
@@ -747,10 +695,13 @@ If the buffer is not assumed by any other open frame, it is killed globally."
   (set-face-attribute 'org-level-5 nil :height 1.0)
   (set-face-attribute 'org-document-title nil :height 1.6 :weight 'bold))
 
+;; -- Projectile ---------------------------------------------
 (use-package projectile
   :config
   (projectile-mode 1)
-  (setq projectile-project-search-path '("/mnt/c/work/projects/")))
+  (setq projectile-project-search-path '("/mnt/c/work/projects/"))
+  (setq projectile-enable-caching 'persistent)
+  (setq projectile-auto-update-cache t))
 
 ;; -- Arrow replacement via post-insert hook -----------------
 (defvar my/arrow-replacements
@@ -783,21 +734,21 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     '(
 
     ("m" "Meeting" entry 
-    (file+datetree "~/org/meetings.org")
+    (file+olp+datetree "~/org/meetings.org")
     "* %^{Meeting title} %? :meeting:\n:ATTENDEES: %^{Attendees (comma separated)}\n\n** Notes\n- \n\n** Action Items\n*** TODO [#A] "
     :tree-type week
     :clock-in t
     :clock-resume t
-    :empty-line Soms 0)
+    :empty-line 0)
 
     ("t" "Todo" entry
     (file+headline "~/org/todo.org" "Tasks")
-    "* TODO %^{Task}\nSCHEDULED: %^t DEADLINE: %^t\n\n-  %?"
+    "* TODO %^{Task}\nSCHEDULED: %^t DEADLINE: %^t\n-  %?"
     :empty-lines 0)
 
-    ("j" "Work Log Entry" entry
+    ("j" "Work Log Entry" item
     (file+datetree "~/org/work-log.org")
-    "* %?"
+    "- %?"
     :empty-lines 0)
 
     ("n" "Quick Note" entry
@@ -810,17 +761,16 @@ If the buffer is not assumed by any other open frame, it is killed globally."
       '((sequence "TODO(t)" "PLANNING(p)" "IN-PROGRESS(i@/!)" "VERIFYING(v!)" "BLOCKED(b@)"  "|" "DONE(d!)" "OBE(o@!)" "WONT-DO(w@/!)" )
         ))
 
-;; TODO colors
-(setq org-todo-keyword-faces
+(setq org-modern-todo-faces
       '(
-        ("TODO" . (:foreground "GoldenRod" :weight bold))
-        ("PLANNING" . (:foreground "DeepPink" :weight bold))
-        ("IN-PROGRESS" . (:foreground "Cyan" :weight bold))
-        ("VERIFYING" . (:foreground "DarkOrange" :weight bold))
-        ("BLOCKED" . (:foreground "Red" :weight bold))
-        ("DONE" . (:foreground "LimeGreen" :weight bold))
-        ("OBE" . (:foreground "LimeGreen" :weight bold))
-        ("WONT-DO" . (:foreground "LimeGreen" :weight bold))
+        ("TODO"        . (:background "GoldenRod"  :foreground "black" :weight bold))
+        ("PLANNING"    . (:background "DeepPink"   :foreground "white" :weight bold))
+        ("IN-PROGRESS" . (:background "Cyan"       :foreground "black" :weight bold))
+        ("VERIFYING"   . (:background "DarkOrange" :foreground "black" :weight bold))
+        ("BLOCKED"     . (:background "Red"        :foreground "white" :weight bold))
+        ("DONE"        . (:background "LimeGreen"  :foreground "black" :weight bold))
+        ("OBE"         . (:background "LimeGreen"  :foreground "black" :weight bold))
+        ("WONT-DO"     . (:background "LimeGreen"  :foreground "black" :weight bold))
         ))
 
 ;; Fancy css
@@ -855,30 +805,24 @@ If the buffer is not assumed by any other open frame, it is killed globally."
   :after (evil org)
   :hook (org-mode . evil-org-mode)
   :config
-  (evil-org-set-key-theme '(navigation insert textobjects additional calendar return)))
+  (evil-org-set-key-theme '(navigation insert textobjects additional todo calendar return)))
 
 ;; -- Spellcheck ---------------------------------------------
 (use-package flyspell
   :ensure nil ; Built-in package
   :hook ((text-mode . flyspell-mode)
-         (prog-mode . flyspell-prog-mode)) ; Checks only comments/strings in code
+         (prog-mode . flyspell-prog-mode)
+         (org-capture-mode . flyspell-mode)) ; Enable in org-capture buffers
   :config
   (setq ispell-program-name "hunspell")
-  ;; Doom configuration optimizations for performance
+  ;; Optimizations
   (setq flyspell-issue-message-flag nil
         flyspell-issue-welcome-flag nil)
-  
-  ;; Configure hunspell arguments
+  (setq ispell-dictionary "en_US")
   (setq ispell-local-dictionary "en_US")
-  (setq ispell-dictionary-alist
+  (setq flyspell-default-dictionary "en_US")
+  (setq ispell-local-dictionary-alist
         '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8))))
-
-(use-package flyspell-correct
-  :ensure t
-  :after flyspell
-  :config
-  ;; Dictates how spelling popups appear. Doom uses standard completion.
-  (define-key flyspell-mode-map [remap flyspell-correct-word-before-point] #'flyspell-correct-wrapper))
 
 ;; -- Native Comp Warnings (suppress) -----------------------
 (setq native-comp-async-report-warnings-errors nil)
@@ -887,56 +831,10 @@ If the buffer is not assumed by any other open frame, it is killed globally."
 (use-package centered-cursor-mode
   :config
   (global-centered-cursor-mode 1)
-  (add-hook 'term-mode-hook (lambda () (centered-cursor-mode -1)))
-  (add-hook 'eshell-mode-hook (lambda () (centered-cursor-mode -1))))
-
-;; --- Two-Tier Workspace/Buffer Tabs ---
-(use-package tab-bar
-  :ensure nil
-  :init
-  (tab-bar-mode 1)
-  :custom
-  (tab-bar-new-tab-to 'rightmost)
-  :config
-  ;; --- Enhance Active Tab Visibility ---
-  (with-eval-after-load 'catppuccin-theme
-    (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
-          (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
-          (bg-inactive  "#24273a")  ; Macchiato Surface
-          (fg-inactive  "#cad3f5")) ; Macchiato Text
-
-      ;; Styling for the currently active tab
-      (set-face-attribute 'tab-bar-tab nil
-                          :background bg-active
-                          :foreground fg-active
-                          :weight 'bold
-                          :box `(:line-width (6 . 3) :color ,bg-active))
-
-      ;; Styling for all inactive tabs
-      (set-face-attribute 'tab-bar-tab-inactive nil
-                          :background bg-inactive
-                          :foreground fg-inactive
-                          :weight 'normal
-                          :box `(:line-width (6 . 3) :color ,bg-inactive))
-
-      ;; Styling for the empty remaining space behind the tabs
-      (set-face-attribute 'tab-bar nil
-                          :background "#181926" ; Darker crust color
-                          :foreground fg-inactive))))
-
-;; Prevent Emacs from treating side-window parents as un-splittable blocks
-(setq window-combination-resize t)
-
-;; --- Prevent Side Window Protection Crashes ---
-(defun my/disable-side-window-parameters (frame)
-  "Temporarily strip side window parameters during layout switches."
-  (window-skip-parameters (frame-selected-window frame)))
-
-;; Tell the tab-bar system to suspend side-window locking rules when shifting layouts
-(setq tab-bar-tab-to-frame-config-function #'my/disable-side-window-parameters)
-
-;; Ensure side-windows don't persist rigid splits across global tab adjustments
-(setq window-combination-resize t)
+  (add-hook 'after-change-major-mode-hook
+            (lambda ()
+              (when (derived-mode-p 'term-mode 'eshell-mode)
+                (centered-cursor-mode -1)))))
 
 ;; -- Vertico (vertical completion UI) ----------------------
 (use-package vertico
@@ -1018,6 +916,11 @@ If the buffer is not assumed by any other open frame, it is killed globally."
 
 (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup)
 
+;; -- Powerline ----------------------------------------------
+(use-package powerline
+  :config
+  (powerline-default-theme))
+
 ;; -- Eglot + Verible (SystemVerilog LSP) -------------------
 (use-package eglot
   :hook (verilog-mode . eglot-ensure)
@@ -1036,7 +939,6 @@ If the buffer is not assumed by any other open frame, it is killed globally."
                                                    "\n")))
                               f))))))
   (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
-
 
 (with-eval-after-load 'magit (dolist (map (list magit-mode-map
                      magit-status-mode-map
@@ -1059,7 +961,6 @@ If the buffer is not assumed by any other open frame, it is killed globally."
 (setq magit-git-executable "git")
 
 ;; -- Popup Bottom Windows (Doom-style) ---------------------
-
 (add-to-list 'display-buffer-alist
   '("\\*scratch\\*"
     (display-buffer-in-side-window)
@@ -1081,30 +982,24 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     (slot . 2)
     (window-height . 0.2)))
 
-;; Make j/k move by visual lines not logical lines
-(with-eval-after-load 'evil
-  (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
-  (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
-  (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
-  (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
-  (evil-ex-define-cmd "bd" #'my/beframe-unassume-current-buffer)
-  (evil-ex-define-cmd "bc" #'my/beframe-unassume-current-buffer))
+(add-to-list 'display-buffer-alist
+  '("\\*terminal\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 3)
+    (window-height . 0.2)))
 
 ;; -- Rainbow Delimiters -------------------------------------
 (use-package rainbow-delimiters
-  :hook (prog-mode . rainbow-delimiters-mode)
-  :config
-  ;; Catppuccin Macchiato colors for each depth
-  (set-face-foreground 'rainbow-delimiters-depth-1-face  "#8aadf4") ; blue
-  (set-face-foreground 'rainbow-delimiters-depth-2-face  "#a6da95") ; green
-  (set-face-foreground 'rainbow-delimiters-depth-3-face  "#eed49f") ; yellow
-  (set-face-foreground 'rainbow-delimiters-depth-4-face  "#f5a97f") ; peach
-  (set-face-foreground 'rainbow-delimiters-depth-5-face  "#c6a0f6") ; mauve
-  (set-face-foreground 'rainbow-delimiters-depth-6-face  "#8bd5ca") ; teal
-  (set-face-foreground 'rainbow-delimiters-depth-7-face  "#ed8796") ; red
-  (set-face-foreground 'rainbow-delimiters-depth-8-face  "#f0c6c6") ; flamingo
-  (set-face-foreground 'rainbow-delimiters-depth-9-face  "#91d7e3") ; sky
-  (set-face-foreground 'rainbow-delimiters-unmatched-face "#ed8796")) ; red for unmatched
+  :hook (prog-mode . rainbow-delimiters-mode))
+
+;; Force the base label face to not interfere
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
 
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
@@ -1112,23 +1007,11 @@ If the buffer is not assumed by any other open frame, it is killed globally."
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(activities avy beframe catppuccin-theme centered-cursor-mode
+   '(activities avy beframe catppuccin-theme centered-cursor-mode dash
 		evil-collection evil-nerd-commenter evil-org
 		evil-surround flyspell-correct general magit
-<<<<<<< Updated upstream
-		marginalia orderless org-superstar ox-gfm projectile
-		rainbow-delimiters tldr undo-history verilog-mode
-		vertico)))
-=======
 		marginalia orderless org-modern org-superstar ox-gfm
 		powerline projectile rainbow-delimiters s tab-spaces
 		tabspaces tldr verilog-mode vertico)))
->>>>>>> Stashed changes
 
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
 
