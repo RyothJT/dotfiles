@@ -145,35 +145,6 @@
         desktop-load-locked-desktop t)
   (desktop-save-mode 1))
 
-;; (setq persp-suppress-no-prefix-key-warning t)
-
-;; (use-package perspective
-;;   :init
-;;   (persp-mode 1)
-;;   :config
-;;   ;; Fix Windows path issues by explicitly setting a normalized file path
-;;   (setq persp-state-default-file (expand-file-name "persp-state" user-emacs-directory))
-;;   ;; Save perspectives on exit
-;;   (add-hook 'kill-emacs-hook #'persp-state-save)
-;;   ;; Restore perspectives on startup if a saved file exists
-;;   (when (file-exists-p persp-state-default-file)
-;;     (persp-state-load persp-state-default-file))
-;;   (setq persp-suppress-no-prefix-key-warning t)
-;;   (add-hook 'tab-bar-mode-hook #'persp-mode)
-;;   (setq tab-bar-tab-post-open-functions
-;;         (lambda (_tab)
-;;           (persp-switch (format "persp-%s" (tab-bar--current-tab-index))))))
-
-(defun my/sync-tab-and-persp-name (&rest _args)
-  "Rename the current perspective to match the active tab-bar tab name."
-  (when (bound-and-true-p persp-mode)
-    (let ((tab-name (alist-get 'name (tab-bar--current-tab))))
-      (when (and tab-name (not (string-empty-p tab-name)))
-        (persp-rename tab-name)))))
-;; Advice tab-bar renaming functions to auto-rename the perspective
-(advice-add 'tab-bar-rename-tab :after #'my/sync-tab-and-persp-name)
-(advice-add 'tab-bar-rename-tab-by-name :after #'my/sync-tab-and-persp-name)
-
 (defun my/tab-bar-select-or-create ()
   "Prompt with Vertico for existing tabs. Switch if chosen, or create a new tab if novel."
   (interactive)
@@ -185,30 +156,13 @@
         (tab-bar-new-tab)
         (tab-bar-rename-tab choice)))))
 
-;; (use-package perspective
-;;   :config
-;;   (setq persp-suppress-no-prefix-key-warning t)
-;;   (persp-mode 1)
-;;   ;; Restores the "+" button on the tab bar
-;;   (setq perspective-show-modestring nil)
-;;   (tab-bar-mode 1)
-;;   (setq tab-bar-format '(tab-bar-format-history 
-;;                          tab-bar-format-tabs 
-;;                          tab-bar-format-add-tab
-;;                          tab-bar-format-align-right 
-;;                          tab-bar-format-global))
-;;   ;; Native Perspective Session Saving (Replaces desktop-mode safely)
-;;   (setq persp-state-default-file (expand-file-name "persp-state" user-emacs-directory))
-;;   ;; Auto-save your workspaces and buffers on exit
-;;   (add-hook 'kill-emacs-hook #'persp-state-save))
-
 (with-eval-after-load 'perspective
   ;; Remove the perspective binding for '/' so Evil search can claim it
   (define-key persp-mode-map (kbd "/") nil))
 
 (defun my/frame-isolated-eshell (&optional arg)
   "Open or create an Eshell buffer unique to the current frame.
-With a prefix ARG, prompts for a session name."
+  With a prefix ARG, prompts for a session name."
   (interactive "P")
   (let* ((frame-id (frame-parameter nil 'window-id))
          (buf-name (format "*eshell-%s*" frame-id)))
@@ -224,23 +178,6 @@ With a prefix ARG, prompts for a session name."
                                (or (ignore-errors (projectile-project-root)) default-directory)
                              default-directory)))
     (my/frame-isolated-eshell)))
-
-(defun my/persp-kill-or-remove-current-buffer ()
-  "Remove current buffer from the perspective and let perspective.el handle the global kill if unreferenced."
-  (interactive)
-  (let* ((buf (current-buffer))
-         (buf-name (buffer-name buf))
-         ;; Gather other valid user buffers in this perspective
-         (all-buffers (persp-current-buffer-names))
-         (clean-list (cl-remove-if (lambda (name) (string-match-p "^\\*" name)) all-buffers))
-         (sibling-user-buffers (cl-remove buf-name clean-list :test #'string-equal))
-         (target-fallback (car sibling-user-buffers)))
-    ;; 1. Evacuate the window safely within local isolation bounds first
-    (if target-fallback
-        (switch-to-buffer target-fallback)
-      (switch-to-buffer "*scratch*"))
-    ;; 2. Hand off the target buffer to perspective's internal reference engine
-    (persp-remove-buffer buf)))
 
 ;; -- Yank Flymake Error at Point ----------------------------
 (defun my/yank-flymake-error ()
@@ -261,13 +198,6 @@ With a prefix ARG, prompts for a session name."
                  (point-max)))))
     (kill-new msgs)
     (message "Copied last 5 messages.")))
-
-(defun my/switch-to-buffer ()
-  "Switch to a perspective buffer, filtering out special buffers."
-  (interactive)
-  (let ((completion-regexp-list (cons "^[^*]" completion-regexp-list)))
-    (persp-switch-to-buffer* 
-     (persp-read-buffer "Switch to buffer: " nil t))))
 
 (defun my/safely-close-workspace ()
   "Prompt the user to explicitly confirm before destroying the active workspace."
@@ -730,17 +660,11 @@ With a prefix ARG, prompts for a session name."
       (when (looking-back (regexp-quote arrow) (- (point) (length arrow)))
         (delete-char (- (length arrow)))
         (insert (string char))))))
-
 (add-hook 'post-self-insert-hook #'my/replace-arrows)
-
-(setq-default prettify-symbols-alist
-  '(("!="   . #x2260)
-    ("::"   . #x2237)))
 
 ;; -- Org Capture Templates ----------------------------------
 (setq org-capture-templates
     '(
-
     ("m" "Meeting" entry 
     (file+olp+datetree "~/org/meetings.org")
     "* %^{Meeting title} %? :meeting:\n:ATTENDEES: %^{Attendees (comma separated)}\n\n** Notes\n- \n\n** Action Items\n*** TODO [#A] "
@@ -762,7 +686,8 @@ With a prefix ARG, prompts for a session name."
     ("n" "Quick Note" entry
      (file+datetree "~/org/notes.org")
      "* %^{Title}\n%T\n\n%?\n"
-     :empty-lines 0)))
+     :empty-lines 0))
+    )
 
 ;; TODO states
 (setq org-todo-keywords
@@ -831,9 +756,6 @@ With a prefix ARG, prompts for a session name."
   (setq flyspell-default-dictionary "en_US")
   (setq ispell-local-dictionary-alist
         '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8))))
-
-;; -- Native Comp Warnings (suppress) -----------------------
-(setq native-comp-async-report-warnings-errors nil)
 
 ;; -- Centered Cursor ----------------------------------------
 (use-package centered-cursor-mode
