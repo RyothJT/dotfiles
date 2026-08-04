@@ -38,6 +38,22 @@
 (global-visual-line-mode 1)
 (setq-default truncate-lines nil)
 
+<<<<<<< Updated upstream
+=======
+;; Auto revert buffers, ask when modified
+(setq global-auto-revert-mode t)
+(save-place-mode 1)
+
+(undelete-frame-mode 1)
+
+;; -- Tabs ---------------------------------------------------
+(global-tab-line-mode 1)
+(setq tab-line-tabs-buffer-group-function t) ; Keep tabs un-grouped
+(setq tab-line-tab-name-function #'tab-line-tab-name-buffer)
+;; Built-in buffer exclusion matching regex pattern for '*' buffers
+(setq tab-line-exclude-buffers '("\\`\\*.*\\*'"))
+
+>>>>>>> Stashed changes
 ;; -- Font ---------------------------------------------------
 (set-face-attribute 'default nil
   :font "JetBrains Mono"
@@ -46,6 +62,7 @@
 ;; Fallback for unicode characters
 (set-fontset-font t 'unicode "Noto Sans" nil 'append)
 
+<<<<<<< Updated upstream
 ;; -- Skip special buffers with H/L -------------------------
 (defun my/next-buffer ()
   "Go to next buffer, strictly honoring frame isolation and ignoring internal ones."
@@ -73,6 +90,8 @@
                 (not (eq (current-buffer) start)))
       (previous-buffer))))
 
+=======
+>>>>>>> Stashed changes
 ;; -- Evil Mode ----------------------------------------------
 (use-package evil
   :init
@@ -84,6 +103,7 @@
   ;; (define-key evil-normal-state-map "L" 'my/prev-buffer)
   (define-key evil-normal-state-map "U" 'undo-redo)
   (global-set-key (kbd "C-=") #'global-text-scale-adjust)
+<<<<<<< Updated upstream
   (global-set-key (kbd "C--") #'global-text-scale-adjust))
 
 ;; 1. Make the normal/motion state maps act as high-priority intercepts
@@ -95,6 +115,15 @@
 (define-key evil-normal-state-map (kbd "L") #'my/prev-buffer)
 (define-key evil-motion-state-map (kbd "H") #'my/next-buffer)
 (define-key evil-motion-state-map (kbd "L") #'my/prev-buffer)
+=======
+  (global-set-key (kbd "C--") #'global-text-scale-adjust)
+  (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
+  (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
+  (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
+  (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
+(evil-make-intercept-map evil-normal-state-map)
+(evil-make-intercept-map evil-motion-state-map))
+>>>>>>> Stashed changes
 
 ;; -- Evil Collection ----------------------------------------
 (use-package evil-collection
@@ -117,11 +146,114 @@
   :config
   (global-evil-surround-mode 1))
 
+;; --- Top-Priority Global Tab Navigation ---
+(defvar my/tab-line-override-map (make-sparse-keymap))
+(define-key my/tab-line-override-map (kbd "H") #'tab-line-switch-to-prev-tab)
+(define-key my/tab-line-override-map (kbd "L") #'tab-line-switch-to-next-tab)
+(define-minor-mode my/tab-line-override-mode
+  "Global minor mode to force H and L tab-line navigation."
+  :global t
+  :keymap my/tab-line-override-map)
+(my/tab-line-override-mode 1)
+(add-to-list 'emulation-mode-map-alists
+             `((my/tab-line-override-mode . ,my/tab-line-override-map)))
+;; Disable override mode inside minibuffers so H and L function normally
+(add-hook 'minibuffer-setup-hook
+          (lambda ()
+            (setq-local my/tab-line-override-mode nil)))
+
+;; -- eshell fix --------------------------------------------
+(defun my/eshell-swap-return-keys ()
+  (with-eval-after-load 'evil-collection-eshell
+    ;; Swap bindings in Evil's insert state for Eshell
+    (evil-define-key 'insert eshell-mode-map
+      (kbd "RET") #'eshell-send-input
+      (kbd "<return>") #'eshell-send-input
+      (kbd "C-RET") #'newline
+      (kbd "C-<return>") #'newline)))
+(add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
+
 ;; -- Session/Workspace Persistence -------------------------
+<<<<<<< Updated upstream
 (require 'desktop)
 (desktop-save-mode 1)
 (setq desktop-auto-save-timeout 30)
 (setq desktop-restore-eager 5)
+=======
+(use-package tabspaces
+  :ensure t
+  :init
+  (require 'tabspaces)
+  :config
+  (tabspaces-mode 1)
+  (setq tabspaces-use-filtered-buffers-as-default t
+        tabspaces-default-tab "Main"
+        tabspaces-initialize-project-with-todo nil)
+  ;; Automatically save and restore desktop session (tabs, windows, buffers)
+  (setq desktop-path (list user-emacs-directory)
+        desktop-dirname user-emacs-directory
+        desktop-base-filename "emacs.desktop"
+        desktop-files-not-to-save "^$"
+        desktop-load-locked-desktop t)
+  (desktop-save-mode 1))
+
+;; (setq persp-suppress-no-prefix-key-warning t)
+
+;; (use-package perspective
+;;   :init
+;;   (persp-mode 1)
+;;   :config
+;;   ;; Fix Windows path issues by explicitly setting a normalized file path
+;;   (setq persp-state-default-file (expand-file-name "persp-state" user-emacs-directory))
+;;   ;; Save perspectives on exit
+;;   (add-hook 'kill-emacs-hook #'persp-state-save)
+;;   ;; Restore perspectives on startup if a saved file exists
+;;   (when (file-exists-p persp-state-default-file)
+;;     (persp-state-load persp-state-default-file))
+;;   (setq persp-suppress-no-prefix-key-warning t)
+;;   (add-hook 'tab-bar-mode-hook #'persp-mode)
+;;   (setq tab-bar-tab-post-open-functions
+;;         (lambda (_tab)
+;;           (persp-switch (format "persp-%s" (tab-bar--current-tab-index))))))
+
+(defun my/sync-tab-and-persp-name (&rest _args)
+  "Rename the current perspective to match the active tab-bar tab name."
+  (when (bound-and-true-p persp-mode)
+    (let ((tab-name (alist-get 'name (tab-bar--current-tab))))
+      (when (and tab-name (not (string-empty-p tab-name)))
+        (persp-rename tab-name)))))
+;; Advice tab-bar renaming functions to auto-rename the perspective
+(advice-add 'tab-bar-rename-tab :after #'my/sync-tab-and-persp-name)
+(advice-add 'tab-bar-rename-tab-by-name :after #'my/sync-tab-and-persp-name)
+
+(defun my/tab-bar-select-or-create ()
+  "Prompt with Vertico for existing tabs. Switch if chosen, or create a new tab if novel."
+  (interactive)
+  (let* ((existing-tabs (mapcar (lambda (tab) (alist-get 'name tab)) (tab-bar-tabs)))
+         (choice (completing-read "Switch or Create Tab: " existing-tabs)))
+    (if (member choice existing-tabs)
+        (tab-bar-select-tab-by-name choice)
+      (when (not (string-empty-p choice))
+        (tab-bar-new-tab)
+        (tab-bar-rename-tab choice)))))
+
+;; (use-package perspective
+;;   :config
+;;   (setq persp-suppress-no-prefix-key-warning t)
+;;   (persp-mode 1)
+;;   ;; Restores the "+" button on the tab bar
+;;   (setq perspective-show-modestring nil)
+;;   (tab-bar-mode 1)
+;;   (setq tab-bar-format '(tab-bar-format-history 
+;;                          tab-bar-format-tabs 
+;;                          tab-bar-format-add-tab
+;;                          tab-bar-format-align-right 
+;;                          tab-bar-format-global))
+;;   ;; Native Perspective Session Saving (Replaces desktop-mode safely)
+;;   (setq persp-state-default-file (expand-file-name "persp-state" user-emacs-directory))
+;;   ;; Auto-save your workspaces and buffers on exit
+;;   (add-hook 'kill-emacs-hook #'persp-state-save))
+>>>>>>> Stashed changes
 
 ;; 1. Tell the desktop engine how to save Eshell buffers cleanly without a file
 (defun my/desktop-save-eshell (_desktop-dirname)
@@ -273,7 +405,11 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     ;; Quit / Session
     "q"   '(:ignore t :which-key "quit/session")
     "qq"  '(save-buffers-kill-terminal :which-key "Quit Emacs")
+<<<<<<< Updated upstream
     "qs"  '(desktop-save-in-desktop-dir :which-key "Save session")
+=======
+    "qs"  '(desktop-save :which-key "Save session")
+>>>>>>> Stashed changes
     "ql"  '(desktop-read :which-key "Load session")
     "qr"  '(restart-emacs :which-key "Restart Emacs")
 
@@ -457,7 +593,7 @@ If the buffer is not assumed by any other open frame, it is killed globally."
     "TAB TAB"  '(tab-bar-switch-to-tab :which-key "Switch workspace")
     "TAB l"    '(tab-bar-switch-to-next-tab :which-key "Next workspace")
     "TAB h"    '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
-    "TAB o"    '(tab-bar-new-tab :which-key "New workspace")
+    "TAB o"    '(my/tab-bar-select-or-create :which-key "New workspace")
     "TAB d"    '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
     "TAB r"    '(tab-bar-rename-tab :which-key "Rename workspace")
 
@@ -979,9 +1115,15 @@ If the buffer is not assumed by any other open frame, it is killed globally."
    '(activities avy beframe catppuccin-theme centered-cursor-mode
 		evil-collection evil-nerd-commenter evil-org
 		evil-surround flyspell-correct general magit
+<<<<<<< Updated upstream
 		marginalia orderless org-superstar ox-gfm projectile
 		rainbow-delimiters tldr undo-history verilog-mode
 		vertico)))
+=======
+		marginalia orderless org-modern org-superstar ox-gfm
+		powerline projectile rainbow-delimiters s tab-spaces
+		tabspaces tldr verilog-mode vertico)))
+>>>>>>> Stashed changes
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
