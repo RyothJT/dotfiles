@@ -879,7 +879,13 @@
 ;; -- Powerline ----------------------------------------------
 (use-package powerline
   :config
-  (powerline-default-theme))
+  (powerline-center-evil-theme))
+
+(setq projectile-mode-line-prefix " Proj")
+(setq projectile-mode-line-function
+      (lambda ()
+        (format " Proj[%s]" (projectile-project-name))))
+
 
 ;; -- Eglot + Verible (SystemVerilog LSP) -------------------
 (use-package eglot
@@ -920,8 +926,7 @@
     "<escape>" #'with-editor-cancel))
 
 ;; These give the most speed with least feature loss
-(setq vc-handled-backends nil)          ; safe, magit replaces this anyway
-(setq magit-diff-refine-hunk nil)       ; minor visual loss
+(setq vc-handled-backends '(Git))
 (setq magit-auto-revert-mode nil)       ; press SPC b r manually after operations
 
 ;; Go back to system git
@@ -976,7 +981,6 @@
  '(package-selected-packages
    '(avy catppuccin-theme centered-cursor-mode evil-collection
 	 evil-nerd-commenter evil-org evil-surround flyspell-correct
-	 general imenu-list magit marginalia minimap orderless
-	 org-modern ox-gfm perspective powerline projectile
+	 general imenu-list magit marginalia minimap mood-line
+	 orderless org-modern ox-gfm perspective powerline projectile
 	 rainbow-delimiters rg sublimity tabspaces tldr vertico vterm)))
-
