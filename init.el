@@ -18,7 +18,6 @@
       user-mail-address "justin.troth@gd-ms.com")
 
 ;;; ui
-
 ;;;; menus and layout
 (menu-bar-mode -1)
 (tool-bar-mode -1)
@@ -138,8 +137,8 @@
   (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
   (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
   (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
-(evil-make-intercept-map evil-normal-state-map)
-(evil-make-intercept-map evil-motion-state-map))
+  (evil-make-intercept-map evil-normal-state-map)
+  (evil-make-intercept-map evil-motion-state-map))
 
 ;;;; evil collection
 (use-package evil-collection
@@ -198,7 +197,6 @@
 
 ;;; session/workspace persistence
 (use-package tabspaces
-  :ensure t
   :config
   (tabspaces-mode 1)
   (setq tabspaces-use-filtered-buffers-as-default t
@@ -746,7 +744,6 @@
 ;;; additional packages
 ;;;; which-key
 (use-package which-key
-  :ensure t                       ; Tells Emacs not to download it from MELPA since it's built-in
   :init
   (setq which-key-idle-delay 0.2)   ; Set your preferred delay here (e.g., 0.0 for instant popup)
   :config
@@ -771,37 +768,34 @@
   :custom
   (tab-bar-new-tab-to 'rightmost)
   :config
-  ;;;- Enhance Active Tab Visibility ---
-  (with-eval-after-load 'catppuccin-theme
-    (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
-          (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
-          (bg-inactive  "#24273a")  ; Macchiato Surface
-          (fg-inactive  "#cad3f5")) ; Macchiato Text
-      ;; Styling for the currently active tab
-      (set-face-attribute 'tab-bar-tab nil
-                          :background bg-active
-                          :foreground fg-active
-                          :weight 'bold
-                          :box `(:line-width (6 . 3) :color ,bg-active))
-      ;; Styling for all inactive tabs
-      (set-face-attribute 'tab-bar-tab-inactive nil
-                          :background bg-inactive
-                          :foreground fg-inactive
-                          :weight 'normal
-                          :box `(:line-width (6 . 3) :color ,bg-inactive))
-      ;; Styling for the empty remaining space behind the tabs
-      (set-face-attribute 'tab-bar nil
-                          :background "#181926" ; Darker crust color
-                          :foreground fg-inactive))))
-
-;;;; tldr
-(use-package tldr)
+  ;; Enhance Active Tab Visibility
+  (let ((bg-active    (catppuccin-get-color 'mauve))    ; Active tab background
+        (fg-active    (catppuccin-get-color 'crust))    ; Active tab text
+        (bg-inactive  (catppuccin-get-color 'surface0)) ; Inactive tab background (Tone 1)
+        (fg-inactive  (catppuccin-get-color 'text))     ; Inactive tab text
+        (bg-bar       (catppuccin-get-color 'crust)))   ; Empty bar background (Tone 2)
+    ;; Styling for the currently active tab
+    (set-face-attribute 'tab-bar-tab nil
+                        :background bg-active
+                        :foreground fg-active
+                        :weight 'bold
+                        :box `(:line-width (6 . 3) :color ,bg-active))
+    ;; Styling for all inactive tabs
+    (set-face-attribute 'tab-bar-tab-inactive nil
+                        :background bg-inactive
+                        :foreground fg-inactive
+                        :weight 'normal
+                        :box `(:line-width (6 . 3) :color ,bg-inactive))
+    ;; Styling for the empty remaining space behind the tabs
+    (set-face-attribute 'tab-bar nil
+                        :background bg-bar
+                        :foreground fg-inactive)))
 
 ;;;; projectile
 (use-package projectile
   :config
   (projectile-mode 1)
-  (setq projectile-project-search-path '("/mnt/c/work/projects/"))
+  (setq projectile-project-search-path '("~/work/projects/"))
   (setq projectile-enable-caching 'persistent)
   (setq projectile-auto-update-cache t))
 
@@ -842,32 +836,32 @@
         '((file (styles basic partial-completion)))))
 
 ;;;; magit
-(use-package magit)
-
-(with-eval-after-load 'magit (dolist (map (list magit-mode-map
+(use-package magit
+  :init
+  (setq vc-handled-backends '(Git))
+  :config
+  (magit-auto-revert-mode 1)
+  ;; Explicitly refresh status buffer on save (useful for non-standard file watchers/TRAMP/WSL)
+  (add-hook 'after-save-hook #'magit-after-save-refresh-status)
+  ;; Unbind SPC in Magit keymaps so Leader key works seamlessly
+  (dolist (map (list magit-mode-map
                      magit-status-mode-map
                      magit-log-mode-map
                      magit-diff-mode-map
                      magit-refs-mode-map
                      magit-revision-mode-map))
     (define-key map (kbd "SPC") nil))
+  (evil-define-key '(normal visual motion) magit-mode-map (kbd "SPC") nil)
   (general-def :states 'normal :keymaps 'magit-mode-map
     "<escape>" #'magit-mode-bury-buffer)
-  (evil-define-key '(normal visual motion) magit-mode-map
-    (kbd "SPC") nil))
-(with-eval-after-load 'transient
+  (with-eval-after-load 'git-commit
+    (general-def :states 'normal :keymaps 'git-commit-mode-map
+      "<escape>" #'with-editor-cancel)))
+
+(use-package transient
+  :config
   (general-def :keymaps 'transient-base-map
     "<escape>" #'transient-quit-one))
-(with-eval-after-load 'git-commit
-  (general-def :states 'normal :keymaps 'git-commit-mode-map
-    "<escape>" #'with-editor-cancel))
-
-(setq vc-handled-backends '(Git))
-(magit-auto-revert-mode 1)       ; press SPC b r manually after operations
-(with-eval-after-load 'magit
-  (add-hook 'after-save-hook #'magit-after-save-refresh-status))
-
-;; (setq magit-git-executable "git")
 
 ;;;; marginalia (annotations on candidates)
 (use-package marginalia
@@ -920,12 +914,11 @@
 ;;;; powerline
 (use-package powerline
   :config
-  (powerline-center-evil-theme))
-
-(setq projectile-mode-line-prefix " ")
-(setq projectile-mode-line-function
+  (powerline-center-evil-theme)
+  (setq projectile-mode-line-prefix " ")
+  (setq projectile-mode-line-function
       (lambda ()
-        (format " [%s]" (projectile-project-name))))
+        (format " [%s]" (projectile-project-name)))))
 
 ;;;; eglot + verible (SystemVerilog LSP)
 (use-package eglot
@@ -950,6 +943,9 @@
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
 
+;;;; tldr
+(use-package tldr)
+
 ;;;; ripgrep
 (use-package rg)
 
@@ -962,8 +958,8 @@
  '(package-selected-packages
    '(avy catppuccin-theme centered-cursor-mode evil-collection evil-mc
 	 evil-nerd-commenter evil-org evil-surround evil-vimish-fold
-	 general magit marginalia orderless org-modern ox-gfm
-	 perspective powerline projectile rainbow-delimiters rg
+	 general git-commit magit marginalia orderless org-modern
+	 ox-gfm perspective powerline projectile rainbow-delimiters rg
 	 tabspaces tldr vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
