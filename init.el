@@ -37,7 +37,9 @@
 (setq-default truncate-lines nil)
 
 ;;;; Auto revert buffers, ask when modified
-(setq global-auto-revert-mode t)
+(global-auto-revert-mode 1)
+(setq global-auto-revert-non-file-buffers t)
+(setq auto-revert-use-notify t)
 (save-place-mode 1)
 (undelete-frame-mode 1)
 
@@ -78,7 +80,7 @@
 
 ;;;; outline
 (defface my/outline-header-face
-  '((t :background "#363a4f" :weight bold))
+  '((t :background "#363a6f" :weight bold))
   "Highlighted background for outline section headers.")
 (add-hook 'emacs-lisp-mode-hook
           (lambda ()
@@ -552,6 +554,14 @@
     "'"   '(org-edit-src-code :which-key "Edit src block")
     "RET" '(org-open-at-point :which-key "Follow link")))
 
+;;;; SPC overrides in special buffers
+(with-eval-after-load 'dired
+  (general-def :states 'normal :keymaps 'dired-mode-map
+    "SPC" general-override-mode-map))
+(with-eval-after-load 'help-mode
+  (general-def :states 'normal :keymaps 'help-mode-map
+    "SPC" general-override-mode-map))
+
 ;;; org mode
 ;;;; general setup
 (setq org-directory "~/org")
@@ -564,7 +574,8 @@
   (org-modern-list '((?- . "•") (?+ . "◦") (?* . "▸")))  ; list markers
   (org-modern-checkbox '((?  . "☐") (?X . "☑") (?- . "◫")))
   (org-modern-table t)
-  (org-modern-block-name t))
+  (org-modern-block-name t)
+  (org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
 
 (setq org-hide-leading-stars t)
 (setq org-startup-indented t)
@@ -752,14 +763,6 @@
   (setq catppuccin-flavor 'macchiato)
   (load-theme 'catppuccin t))
 
-;;;; SPC overrides in special buffers
-(with-eval-after-load 'dired
-  (general-def :states 'normal :keymaps 'dired-mode-map
-    "SPC" general-override-mode-map))
-(with-eval-after-load 'help-mode
-  (general-def :states 'normal :keymaps 'help-mode-map
-    "SPC" general-override-mode-map))
-
 ;;;; Two-Tier Workspace/Buffer Tabs
 (use-package tab-bar
   :ensure nil
@@ -841,6 +844,31 @@
 ;;;; magit
 (use-package magit)
 
+(with-eval-after-load 'magit (dolist (map (list magit-mode-map
+                     magit-status-mode-map
+                     magit-log-mode-map
+                     magit-diff-mode-map
+                     magit-refs-mode-map
+                     magit-revision-mode-map))
+    (define-key map (kbd "SPC") nil))
+  (general-def :states 'normal :keymaps 'magit-mode-map
+    "<escape>" #'magit-mode-bury-buffer)
+  (evil-define-key '(normal visual motion) magit-mode-map
+    (kbd "SPC") nil))
+(with-eval-after-load 'transient
+  (general-def :keymaps 'transient-base-map
+    "<escape>" #'transient-quit-one))
+(with-eval-after-load 'git-commit
+  (general-def :states 'normal :keymaps 'git-commit-mode-map
+    "<escape>" #'with-editor-cancel))
+
+(setq vc-handled-backends '(Git))
+(magit-auto-revert-mode 1)       ; press SPC b r manually after operations
+(with-eval-after-load 'magit
+  (add-hook 'after-save-hook #'magit-after-save-refresh-status))
+
+;; (setq magit-git-executable "git")
+
 ;;;; marginalia (annotations on candidates)
 (use-package marginalia
   :init
@@ -870,50 +898,34 @@
   :ensure nil
   :mode (("\\.v\\'" . verilog-mode)
          ("\\.sv\\'" . verilog-mode))
-
+  :custom-face
+  (verilog-parameter-face ((t :foreground "#cee49f" :weight bold)))
+  (verilog-number-face    ((t :foreground "#f5a97f")))
   :config
-  ;;; Verilog Mode -------------------------------------------
-  (setq verilog-linter "/usr/local/bin/verible-verilog-lint")
-
-  ;; Customizations to mimic Doom's clean formatting
-  (setq verilog-indent-level             4
-        verilog-indent-level-module      4
+  (setq verilog-linter "/usr/local/bin/verible-verilog-lint"
+        verilog-indent-level 4
+        verilog-indent-level-module 4
         verilog-indent-level-declaration 4
-        verilog-indent-level-behavioral  4
-        verilog-auto-endcomments         nil)) ; Disables noisy "endmodule // name" comments
+        verilog-indent-level-behavioral 4
+        verilog-auto-endcomments nil)
 
-(advice-add 'verilog-auto :after
-            (lambda (&rest _) (untabify (point-min) (point-max))))
+  (defun my/verilog-font-lock-setup ()
+    (font-lock-add-keywords nil
+      '(("\\b\\([A-Z][A-Z0-9_]+\\)\\b" 1 'verilog-parameter-face)
+        ("\\b\\([0-9]+\\('[bdh][0-9a-fA-FxXzZ_]+\\)?\\)\\b" 1 'verilog-number-face))
+      'append)) ; Use 'append so syntactic comment/string faces take precedence
 
-;; Define custom faces
-(defface verilog-parameter-face
-  '((t :foreground "#cee49f" :weight bold))
-  "Face for Verilog ALL_CAPS parameters/constants.")
-
-(defface verilog-number-face
-  '((t :foreground "#f5a97f"))
-  "Face for Verilog numeric literals.")
-
-;; Apply via hook with prepend to override verilog-mode defaults
-(defun my/verilog-font-lock-setup ()
-  (font-lock-add-keywords nil
-    '(("\\b\\([A-Z][A-Z0-9_]+\\)\\b"
-       0 'verilog-parameter-face prepend)
-      ("\\b\\([0-9]+\\('[bdh][0-9a-fA-FxXzZ_]+\\)?\\)\\b"
-       0 'verilog-number-face prepend))
-    'prepend))
-
-(add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup)
+  (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup))
 
 ;;;; powerline
 (use-package powerline
   :config
   (powerline-center-evil-theme))
 
-(setq projectile-mode-line-prefix " Proj")
+(setq projectile-mode-line-prefix " ")
 (setq projectile-mode-line-function
       (lambda ()
-        (format " Proj[%s]" (projectile-project-name))))
+        (format " [%s]" (projectile-project-name))))
 
 ;;;; eglot + verible (SystemVerilog LSP)
 (use-package eglot
@@ -934,32 +946,6 @@
                               f))))))
   (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
 
-;;;; magit overrides
-(with-eval-after-load 'magit (dolist (map (list magit-mode-map
-                     magit-status-mode-map
-                     magit-log-mode-map
-                     magit-diff-mode-map
-                     magit-refs-mode-map
-                     magit-revision-mode-map))
-    (define-key map (kbd "SPC") nil))
-  (general-def :states 'normal :keymaps 'magit-mode-map
-    "<escape>" #'magit-mode-bury-buffer)
-  (evil-define-key '(normal visual motion) magit-mode-map
-    (kbd "SPC") nil))
-(with-eval-after-load 'transient
-  (general-def :keymaps 'transient-base-map
-    "<escape>" #'transient-quit-one))
-(with-eval-after-load 'git-commit
-  (general-def :states 'normal :keymaps 'git-commit-mode-map
-    "<escape>" #'with-editor-cancel))
-
-;; These give the most speed with least feature loss
-(setq vc-handled-backends '(Git))
-(setq magit-auto-revert-mode nil)       ; press SPC b r manually after operations
-
-;; Go back to system git
-(setq magit-git-executable "git")
-
 ;;;; rainbow delimiters
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
@@ -968,14 +954,6 @@
 (use-package rg)
 
 ;;;; custom
-;; Force the base label face to not interfere
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
-
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -984,6 +962,12 @@
  '(package-selected-packages
    '(avy catppuccin-theme centered-cursor-mode evil-collection evil-mc
 	 evil-nerd-commenter evil-org evil-surround evil-vimish-fold
-	 general magit marginalia minimap orderless org-modern ox-gfm
+	 general magit marginalia orderless org-modern ox-gfm
 	 perspective powerline projectile rainbow-delimiters rg
-	 tabspaces tldr vertico vimish-fold)))
+	 tabspaces tldr vertico)))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
