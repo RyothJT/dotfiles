@@ -177,6 +177,21 @@
   :config
   (evil-org-set-key-theme '(navigation insert textobjects additional todo calendar return)))
 
+;;;; evil-goggles
+(use-package evil-goggles
+  :after evil
+  :config
+  (evil-goggles-mode 1)
+  ;; Duration of the visual highlight (in seconds)
+  (setq evil-goggles-duration 0.050)
+  ;; Enable/disable support for specific actions
+  (setq evil-goggles-enable-delete t)
+  (setq evil-goggles-enable-change t)
+  (setq evil-goggles-enable-indent t)
+  (setq evil-goggles-enable-yank t)
+  (setq evil-goggles-enable-join t)
+  (setq evil-goggles-enable-nerd-commenter t))
+
 ;;; Top-Priority Global Tab Navigation
 (defvar my/tab-line-override-map (make-sparse-keymap))
 (define-key my/tab-line-override-map (kbd "H") #'tab-line-switch-to-prev-tab)
@@ -955,12 +970,15 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(custom-safe-themes
+   '("c4df9006b9eb32599d758800a32f3487c2cdf13826084511783b47d419024af2"
+     default))
  '(package-selected-packages
-   '(avy catppuccin-theme centered-cursor-mode evil-collection evil-mc
-	 evil-nerd-commenter evil-org evil-surround evil-vimish-fold
-	 general git-commit magit marginalia orderless org-modern
-	 ox-gfm perspective powerline projectile rainbow-delimiters rg
-	 tabspaces tldr vertico)))
+   '(avy catppuccin-theme centered-cursor-mode evil-collection
+	 evil-goggles evil-mc evil-nerd-commenter evil-org
+	 evil-surround evil-vimish-fold general git-commit magit
+	 marginalia orderless org-modern ox-gfm perspective powerline
+	 projectile rainbow-delimiters rg tabspaces tldr vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
