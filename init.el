@@ -128,11 +128,16 @@
   (setq evil-want-integration t)
   (setq evil-want-keybinding nil)
   (setq evil-search-module 'evil-search)
+  (setq evil-symbol-word-search t)
+
   :config
   (evil-mode 1)
   (define-key evil-normal-state-map "U" 'undo-redo)
   (global-set-key (kbd "C-=") #'global-text-scale-adjust)
   (global-set-key (kbd "C--") #'global-text-scale-adjust)
+  ;; Force Evil 'iw' and 'aw' to treat symbols (including hyphens) as words
+  (define-key evil-inner-text-objects-map "w" 'evil-inner-symbol)
+  (define-key evil-outer-text-objects-map "w" 'evil-a-symbol)
   (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
   (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
   (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
