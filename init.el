@@ -869,6 +869,12 @@
   (setq vc-handled-backends '(Git))
   :config
   (magit-auto-revert-mode 1)
+
+  (defun my/magit-hide-cursor ()
+    (setq-local evil-normal-state-cursor '(nil)
+      evil-motion-state-cursor '(nil)))
+  (add-hook 'magit-mode-hook #'my/magit-hide-cursor)
+
   ;; Explicitly refresh status buffer on save (useful for non-standard file watchers/TRAMP/WSL)
   (add-hook 'after-save-hook #'magit-after-save-refresh-status)
   ;; Unbind SPC in Magit keymaps so Leader key works seamlessly
