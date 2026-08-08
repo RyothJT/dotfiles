@@ -154,15 +154,25 @@
         (tab-bar-new-tab)
         (tab-bar-rename-tab choice)))))
 
-;;;; backups
-(setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
-(setq make-backup-files t)   ;; keep making backups
-(setq version-control t)     ;; use numbered backups (file.~1~, file.~2~, ...)
-(setq delete-old-versions t) ;; auto-delete old numbered backups
-(setq kept-new-versions 6)
-(setq kept-old-versions 2)
-(setq auto-save-file-name-transforms
-      `((".*" "~/.emacs.d/auto-save/" t)))
+;;;; backups, auto-saves, and lockfiles
+(let ((backup-dir    (expand-file-name "backups/" user-emacs-directory))
+      (auto-save-dir (expand-file-name "auto-save/" user-emacs-directory))
+      (lock-dir      (expand-file-name "lockfiles/" user-emacs-directory)))
+  ;; Create directories if they don't exist
+  (dolist (dir (list backup-dir auto-save-dir lock-dir))
+    (unless (file-exists-p dir)
+      (make-directory dir t)))
+  ;; Configure backup files
+  (setq backup-directory-alist `(("." . ,backup-dir)))
+  (setq make-backup-files t)
+  (setq version-control t)
+  (setq delete-old-versions t)
+  (setq kept-new-versions 6)
+  (setq kept-old-versions 2)
+  ;; Configure auto-save files
+  (setq auto-save-file-name-transforms `((".*" ,auto-save-dir t)))
+  ;; Configure lockfiles (Emacs 28+)
+  (setq lock-file-name-transforms `((".*" ,lock-dir t))))
 
 ;;; evil mode
 ;;;; evil package
