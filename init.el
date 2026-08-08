@@ -1,11 +1,12 @@
-;;; garbage collection
+;;; core
+;;;; garbage collection
 (setq gc-cons-threshold (* 100 1024 1024)) ; 100 MB
 ;; Reset it to a reasonable background level after startup completes
 (add-hook 'emacs-startup-hook
           (lambda ()
             (setq gc-cons-threshold (* 8 1024 1024)))) ; 8 MB
 
-;;; package setup
+;;;; package setup
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
@@ -13,7 +14,7 @@
 (unless package-archive-contents
   (package-refresh-contents))
 
-;;; identity
+;;;; identity
 (setq user-full-name "Justin Troth"
       user-mail-address "justin.troth@gd-ms.com")
 
@@ -121,6 +122,66 @@
     (slot . 3)
     (window-height . 0.2)))
 
+;;;; catppuccin Theme
+(use-package catppuccin-theme
+  :config
+  (setq catppuccin-flavor 'macchiato)
+  (load-theme 'catppuccin t))
+
+;;; global tab line keybindings
+(defvar my/tab-line-override-map (make-sparse-keymap))
+(define-key my/tab-line-override-map (kbd "H") #'tab-line-switch-to-prev-tab)
+(define-key my/tab-line-override-map (kbd "L") #'tab-line-switch-to-next-tab)
+(define-minor-mode my/tab-line-override-mode
+  "Global minor mode to force H and L tab-line navigation."
+  :global t
+  :keymap my/tab-line-override-map)
+  (my/tab-line-override-mode 1)
+  (add-to-list 'emulation-mode-map-alists
+  `((my/tab-line-override-mode . ,my/tab-line-override-map)))
+
+;; Disable in insert mode, enable in all other evil states
+(dolist (hook '(evil-insert-state-entry-hook minibuffer-setup-hook))
+(add-hook hook (lambda () (my/tab-line-override-mode -1))))
+(dolist (hook '(evil-insert-state-exit-hook minibuffer-exit-hook))
+(add-hook hook (lambda () (my/tab-line-override-mode 1))))
+
+;;; session/workspace persistence
+(use-package tabspaces
+  :config
+  (tabspaces-mode 1)
+  (setq tabspaces-use-filtered-buffers-as-default t
+        tabspaces-default-tab "Main"
+        tabspaces-initialize-project-with-todo nil)
+  ;; Automatically save and restore desktop session (tabs, windows, buffers)
+  (setq desktop-path (list user-emacs-directory)
+        desktop-dirname user-emacs-directory
+        desktop-base-filename "emacs.desktop"
+        desktop-files-not-to-save "^$"
+        desktop-load-locked-desktop t)
+  (desktop-save-mode 1))
+
+(defun my/tab-bar-select-or-create ()
+  "Prompt with Vertico for existing tabs. Switch if chosen, or create a new tab if novel."
+  (interactive)
+  (let* ((existing-tabs (mapcar (lambda (tab) (alist-get 'name tab)) (tab-bar-tabs)))
+         (choice (completing-read "Switch or Create Tab: " existing-tabs)))
+    (if (member choice existing-tabs)
+        (tab-bar-select-tab-by-name choice)
+      (when (not (string-empty-p choice))
+        (tab-bar-new-tab)
+        (tab-bar-rename-tab choice)))))
+
+;;;; backups
+(setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
+(setq make-backup-files t)   ;; keep making backups
+(setq version-control t)     ;; use numbered backups (file.~1~, file.~2~, ...)
+(setq delete-old-versions t) ;; auto-delete old numbered backups
+(setq kept-new-versions 6)
+(setq kept-old-versions 2)
+(setq auto-save-file-name-transforms
+      `((".*" "~/.emacs.d/auto-save/" t)))
+
 ;;; evil mode
 ;;;; evil package
 (use-package evil
@@ -197,60 +258,6 @@
   (setq evil-goggles-enable-join t)
   (setq evil-goggles-enable-nerd-commenter t))
 
-;;; Top-Priority Global Tab Navigation
-(defvar my/tab-line-override-map (make-sparse-keymap))
-(define-key my/tab-line-override-map (kbd "H") #'tab-line-switch-to-prev-tab)
-(define-key my/tab-line-override-map (kbd "L") #'tab-line-switch-to-next-tab)
-(define-minor-mode my/tab-line-override-mode
-  "Global minor mode to force H and L tab-line navigation."
-  :global t
-  :keymap my/tab-line-override-map)
-(my/tab-line-override-mode 1)
-(add-to-list 'emulation-mode-map-alists
-             `((my/tab-line-override-mode . ,my/tab-line-override-map)))
-
-;; Disable in insert mode, enable in all other evil states
-(dolist (hook '(evil-insert-state-entry-hook minibuffer-setup-hook))
-  (add-hook hook (lambda () (my/tab-line-override-mode -1))))
-(dolist (hook '(evil-insert-state-exit-hook minibuffer-exit-hook))
-  (add-hook hook (lambda () (my/tab-line-override-mode 1))))
-
-;;; session/workspace persistence
-(use-package tabspaces
-  :config
-  (tabspaces-mode 1)
-  (setq tabspaces-use-filtered-buffers-as-default t
-        tabspaces-default-tab "Main"
-        tabspaces-initialize-project-with-todo nil)
-  ;; Automatically save and restore desktop session (tabs, windows, buffers)
-  (setq desktop-path (list user-emacs-directory)
-        desktop-dirname user-emacs-directory
-        desktop-base-filename "emacs.desktop"
-        desktop-files-not-to-save "^$"
-        desktop-load-locked-desktop t)
-  (desktop-save-mode 1))
-
-(defun my/tab-bar-select-or-create ()
-  "Prompt with Vertico for existing tabs. Switch if chosen, or create a new tab if novel."
-  (interactive)
-  (let* ((existing-tabs (mapcar (lambda (tab) (alist-get 'name tab)) (tab-bar-tabs)))
-         (choice (completing-read "Switch or Create Tab: " existing-tabs)))
-    (if (member choice existing-tabs)
-        (tab-bar-select-tab-by-name choice)
-      (when (not (string-empty-p choice))
-        (tab-bar-new-tab)
-        (tab-bar-rename-tab choice)))))
-
-;;;; backups
-(setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
-(setq make-backup-files t)   ;; keep making backups
-(setq version-control t)     ;; use numbered backups (file.~1~, file.~2~, ...)
-(setq delete-old-versions t) ;; auto-delete old numbered backups
-(setq kept-new-versions 6)
-(setq kept-old-versions 2)
-(setq auto-save-file-name-transforms
-      `((".*" "~/.emacs.d/auto-save/" t)))
-
 ;;; custom commands
 (defun my/yank-flymake-error ()
   "Copy the flymake diagnostic message at point to clipboard."
@@ -300,7 +307,7 @@
      (arg (call-interactively #'eshell))
      (t (eshell buf-name)))))
 
-;;; general.el (Leader Key)
+;;; general.el (leader key)
 (use-package general
   :config
   ;; Main leader
@@ -771,12 +778,6 @@
         which-key-prefix-prefix "")
   (which-key-mode 1))
 
-;;;; catppuccin Theme
-(use-package catppuccin-theme
-  :config
-  (setq catppuccin-flavor 'macchiato)
-  (load-theme 'catppuccin t))
-
 ;;;; Two-Tier Workspace/Buffer Tabs
 (use-package tab-bar
   :ensure nil
@@ -852,6 +853,16 @@
         completion-category-overrides
         '((file (styles basic partial-completion)))))
 
+;;;; marginalia (annotations on candidates)
+(use-package marginalia
+  :init
+  (marginalia-mode 1))
+
+;;;; consult (Search with live previews)
+(use-package consult
+  :config
+  (setq consult-narrow-key "<"))
+
 ;;;; magit
 (use-package magit
   :init
@@ -895,11 +906,6 @@
 
 ;;;; git-link
 (use-package git-link)
-
-;;;; marginalia (annotations on candidates)
-(use-package marginalia
-  :init
-  (marginalia-mode 1))
 
 ;;;; avy jumper (helix gw emulator)
 (use-package avy
@@ -972,11 +978,6 @@
                               f))))))
   (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
 
-;;;; consult - Search with live previews
-(use-package consult
-  :config
-  (setq consult-narrow-key "<"))
-
 ;;;; rainbow delimiters
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
@@ -1015,3 +1016,4 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  )
+
