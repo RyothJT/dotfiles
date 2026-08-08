@@ -976,6 +976,13 @@
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
 
+;;;; indent-bars - Visual scope lines
+(use-package indent-bars
+  :hook (prog-mode . indent-bars-mode)
+  :config
+  (setq indent-bars-treesitter-support t
+        indent-bars-no-descend-string t))
+
 ;;;; tldr
 (use-package tldr)
 
