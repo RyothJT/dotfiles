@@ -194,41 +194,8 @@
 (dolist (hook '(evil-insert-state-exit-hook minibuffer-exit-hook))
   (add-hook hook (lambda () (my/tab-line-override-mode 1))))
 
-;;; eshell fix
-(defun my/eshell-swap-return-keys ()
-  (with-eval-after-load 'evil-collection-eshell
-    ;; Swap bindings in Evil's insert state for Eshell
-    (evil-define-key 'insert eshell-mode-map
-      (kbd "RET") #'eshell-send-input
-      (kbd "<return>") #'eshell-send-input
-      (kbd "C-RET") #'newline
-      (kbd "C-<return>") #'newline)))
-(add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
-(setq eshell-term-name "xterm-256color")
-
-;;;; custom eshell functions
-(defun my/frame-isolated-eshell (&optional arg)
-  "Open or create an Eshell buffer unique to the current frame.
-  With a prefix ARG, prompts for a session name."
-  (interactive "P")
-  (let* ((frame-id (frame-parameter nil 'window-id))
-         (buf-name (format "*eshell-%s*" frame-id)))
-    (cond
-     (arg (call-interactively #'eshell))
-     (t (eshell buf-name)))))
-
-;; Update your helper function for project eshell spawning as well
-(defun my/project-eshell ()
-  "Open a frame-isolated Eshell in the current project root."
-  (interactive)
-  (let ((default-directory (if (fboundp 'projectile-project-root)
-                               (or (ignore-errors (projectile-project-root)) default-directory)
-                             default-directory)))
-    (my/frame-isolated-eshell)))
-
 ;;; session/workspace persistence
 (use-package tabspaces
-  :ensure t
   :init
   (require 'tabspaces)
   :config
@@ -295,6 +262,37 @@
   (if (yes-or-no-p "Really delete current tab? ")
       (tab-bar-close-tab)
     (message "Tab deletion canceled.")))
+
+;;;; eshell fix
+(defun my/eshell-swap-return-keys ()
+  (with-eval-after-load 'evil-collection-eshell
+    ;; Swap bindings in Evil's insert state for Eshell
+    (evil-define-key 'insert eshell-mode-map
+      (kbd "RET") #'eshell-send-input
+      (kbd "<return>") #'eshell-send-input
+      (kbd "C-RET") #'newline
+      (kbd "C-<return>") #'newline)))
+(add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
+(setq eshell-term-name "xterm-256color")
+
+(defun my/frame-isolated-eshell (&optional arg)
+  "Open or create an Eshell buffer unique to the current frame.
+  With a prefix ARG, prompts for a session name."
+  (interactive "P")
+  (let* ((frame-id (frame-parameter nil 'window-id))
+         (buf-name (format "*eshell-%s*" frame-id)))
+    (cond
+     (arg (call-interactively #'eshell))
+     (t (eshell buf-name)))))
+
+;; Update your helper function for project eshell spawning as well
+(defun my/project-eshell ()
+  "Open a frame-isolated Eshell in the current project root."
+  (interactive)
+  (let ((default-directory (if (fboundp 'projectile-project-root)
+                               (or (ignore-errors (projectile-project-root)) default-directory)
+                             default-directory)))
+    (my/frame-isolated-eshell)))
 
 ;;; general.el (Leader Key)
 (use-package general
@@ -591,7 +589,6 @@
             "#+date: " (format-time-string "<%Y-%m-%d %a %H:%M>") "\n\n")))
 
 (add-hook 'find-file-hook #'my/auto-insert-org-template)
-(add-hook 'org-mode-hook 'org-indent-mode)
 
 (setq org-log-done 'time)
 (setq org-return-follows-link t)
@@ -663,7 +660,6 @@
   (set-face-attribute 'org-level-4 nil :height 1.1)
   (set-face-attribute 'org-level-5 nil :height 1.0)
   (set-face-attribute 'org-document-title nil :height 1.6 :weight 'bold))
-
 
 ;;;; org capture templates
 (setq org-capture-templates
@@ -828,8 +824,6 @@
   (setq flyspell-issue-message-flag nil
         flyspell-issue-welcome-flag nil)
   (setq ispell-dictionary "en_US")
-  (setq ispell-local-dictionary "en_US")
-  (setq flyspell-default-dictionary "en_US")
   (setq ispell-local-dictionary-alist
         '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8))))
 
