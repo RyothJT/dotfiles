@@ -22,7 +22,7 @@
 ;;;; menus and layout
 (menu-bar-mode -1)
 (tool-bar-mode -1)
-(scroll-bar-mode t)
+(scroll-bar-mode -1)
 (setq display-line-numbers-type 'relative)
 (global-display-line-numbers-mode 1)
 (add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
