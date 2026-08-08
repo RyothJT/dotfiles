@@ -918,7 +918,13 @@
   (diff-hl-flydiff-mode 1)
   ;; Integration with Magit: refresh fringe automatically after committing/staging
   (add-hook 'magit-pre-refresh-hook  #'diff-hl-magit-pre-refresh)
-  (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh))
+  (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh)
+
+  (with-eval-after-load 'autorevert
+    ;; Do not attempt to auto-revert lockfiles or temporary files
+    (setq auto-revert-skip-requirements-file-regexp "\\(?:\\`\\.#\\|~\\|#\\)")
+    ;; Silence message output during auto-reverts
+    (setq auto-revert-verbose nil)))
 
 ;;;; git-link
 (use-package git-link)
