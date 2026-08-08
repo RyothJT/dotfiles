@@ -1,56 +1,54 @@
-;; -- Garbage collection ------------------------------------
+;;; garbage collection
 (setq gc-cons-threshold (* 100 1024 1024)) ; 100 MB
 ;; Reset it to a reasonable background level after startup completes
 (add-hook 'emacs-startup-hook
           (lambda ()
             (setq gc-cons-threshold (* 8 1024 1024)))) ; 8 MB
 
-;; -- Package Setup ------------------------------------------
+;;; package setup
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
 (setq use-package-always-ensure t)
-
 (unless package-archive-contents
   (package-refresh-contents))
 
-;; -- Identity -----------------------------------------------
+;;; identity
 (setq user-full-name "Justin Troth"
       user-mail-address "justin.troth@gd-ms.com")
 
-;; -- UI -----------------------------------------------------
+;;; ui
+;;;; menus and layout
 (menu-bar-mode -1)
 (tool-bar-mode -1)
 (scroll-bar-mode t)
 (setq display-line-numbers-type 'relative)
 (global-display-line-numbers-mode 1)
 (add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
-(setopt display-fill-column-indicator-column 80)
+(setq display-fill-column-indicator-column 80)
 
-;; Window size at launch
+;;;; Window size at launch
 (setq initial-frame-alist '((width . 180) (height . 41)))
 (setq default-frame-alist initial-frame-alist)
 
-;; Soft wrap + navigate visual lines (not logical lines)
+;;;; Soft wrap + navigate visual lines (not logical lines)
 (global-visual-line-mode 1)
 (setq-default truncate-lines nil)
 
-;; Auto revert buffers, ask when modified
-(setq global-auto-revert-mode t)
+;;;; Auto revert buffers, ask when modified
+(global-auto-revert-mode 1)
+(setq global-auto-revert-non-file-buffers t)
+(setq auto-revert-use-notify t)
 (save-place-mode 1)
 (undelete-frame-mode 1)
 
-;; ssh fix
-(setq tramp-inline-compress-start-size nil)  ;; disable inline compression
-
-;; -- Tabs ---------------------------------------------------
+;;;; tabs
 (global-tab-line-mode 1)
-(setq tab-line-tabs-buffer-group-function t) ; Keep tabs un-grouped
 (setq tab-line-tab-name-function #'tab-line-tab-name-buffer)
 ;; Built-in buffer exclusion matching regex pattern for '*' buffers
 (setq tab-line-exclude-buffers '("\\`\\*.*\\*'"))
 
-;; -- Font ---------------------------------------------------
+;;;; font
 (set-face-attribute 'default nil
   :font "JetBrains Mono"
   :height 100)
@@ -58,7 +56,73 @@
 ;; Fallback for unicode characters
 (set-fontset-font t 'unicode "Noto Sans" nil 'append)
 
-;; -- Evil Mode ----------------------------------------------
+;;;; arrow replacement via post-insert hook
+(defvar my/arrow-replacements
+  '(("-->"  . #x2192)
+    ("<--"  . #x2190)
+    ("==>"  . #x21D2)
+    ("<=="  . #x21D0)
+    ("<=>"  . #x27FA)
+    ("->>"  . #x21A0)
+    ("<<-"  . #x219E)
+    ("..."  . #x2026)))
+
+(defun my/replace-arrows ()
+  "Replace arrow sequences with Unicode characters."
+  (dolist (pair my/arrow-replacements)
+    (let ((arrow (car pair))
+          (char (cdr pair)))
+      (when (looking-back (regexp-quote arrow) (- (point) (length arrow)))
+        (delete-char (- (length arrow)))
+        (insert (string char))))))
+(add-hook 'post-self-insert-hook #'my/replace-arrows)
+
+;;;; outline
+(defface my/outline-header-face
+  '((t :background "#363a6f" :weight bold))
+  "Highlighted background for outline section headers.")
+(add-hook 'emacs-lisp-mode-hook
+          (lambda ()
+            (setq-local outline-regexp ";;;+")
+            (outline-minor-mode 1)
+            (font-lock-add-keywords nil
+              '(("^;;;+.*$" 0 'my/outline-header-face prepend)))))
+(with-eval-after-load 'outline
+  (evil-define-key 'normal outline-minor-mode-map
+    (kbd "TAB") #'outline-cycle
+    (kbd "<backtab>") #'outline-cycle-buffer))
+
+;;;; popup bottom windows (Doom-style)
+(add-to-list 'display-buffer-alist
+  '("\\*scratch\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 0)
+    (window-height . 0.2)))
+
+(add-to-list 'display-buffer-alist
+  '("\\*Async Shell Command\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 1)
+    (window-height . 0.2)))
+
+(add-to-list 'display-buffer-alist
+  '("\\*eshell\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 2)
+    (window-height . 0.2)))
+
+(add-to-list 'display-buffer-alist
+  '("\\*terminal\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 3)
+    (window-height . 0.2)))
+
+;;; evil mode
+;;;; evil package
 (use-package evil
   :init
   (setq evil-want-integration t)
@@ -73,31 +137,47 @@
   (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
   (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
   (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
-(evil-make-intercept-map evil-normal-state-map)
-(evil-make-intercept-map evil-motion-state-map))
+  (evil-make-intercept-map evil-normal-state-map)
+  (evil-make-intercept-map evil-motion-state-map))
 
-;; -- Evil Collection ----------------------------------------
+;;;; evil collection
 (use-package evil-collection
   :after evil
   :config
   (evil-collection-init))
 
-;; -- Evil Nerd Commenter (gcc, gc, gcp, etc) ---------------
+;;;; evil nerd commenter (gcc, gc, gcp, etc)
 (use-package evil-nerd-commenter
   :after evil
   :config
-  (evilnc-default-hotkeys nil t)
-  ;; Explicitly bind gc operator in normal and visual
   (define-key evil-normal-state-map (kbd "gc") 'evilnc-comment-operator)
   (define-key evil-visual-state-map (kbd "gc") 'evilnc-comment-operator))
 
-;; -- Evil Surround (ys, cs, ds) ----------------------------
+;;;; evil surround (ys, cs, ds)
 (use-package evil-surround
   :after evil
   :config
   (global-evil-surround-mode 1))
 
-;; --- Top-Priority Global Tab Navigation ---
+;;;; evil-mc
+(use-package evil-mc
+  :after evil
+  :config
+  (global-evil-mc-mode 1)
+  (evil-define-key '(normal visual) 'global
+    (kbd "C-S-j") #'evil-mc-make-cursor-move-next-line
+    (kbd "C-S-k") #'evil-mc-make-cursor-move-prev-line
+    "," #'evil-mc-undo-all-cursors))
+(setq native-comp-async-report-warnings-errors nil)
+
+;;;; evil org (proper Doom-like org keybinds)
+(use-package evil-org
+  :after (evil org)
+  :hook (org-mode . evil-org-mode)
+  :config
+  (evil-org-set-key-theme '(navigation insert textobjects additional todo calendar return)))
+
+;;; Top-Priority Global Tab Navigation
 (defvar my/tab-line-override-map (make-sparse-keymap))
 (define-key my/tab-line-override-map (kbd "H") #'tab-line-switch-to-prev-tab)
 (define-key my/tab-line-override-map (kbd "L") #'tab-line-switch-to-next-tab)
@@ -110,37 +190,13 @@
              `((my/tab-line-override-mode . ,my/tab-line-override-map)))
 
 ;; Disable in insert mode, enable in all other evil states
-(add-hook 'evil-insert-state-entry-hook
-          (lambda () (my/tab-line-override-mode -1)))
+(dolist (hook '(evil-insert-state-entry-hook minibuffer-setup-hook))
+  (add-hook hook (lambda () (my/tab-line-override-mode -1))))
+(dolist (hook '(evil-insert-state-exit-hook minibuffer-exit-hook))
+  (add-hook hook (lambda () (my/tab-line-override-mode 1))))
 
-(add-hook 'evil-insert-state-exit-hook
-          (lambda () (my/tab-line-override-mode 1)))
-
-;; ;; Disable override mode inside minibuffers so H and L function normally
-;; (add-hook 'minibuffer-setup-hook
-;;           (lambda ()
-;;             (setq-local my/tab-line-override-mode nil)))
-
-;; -- eshell fix --------------------------------------------
-(defun my/eshell-swap-return-keys ()
-  (with-eval-after-load 'evil-collection-eshell
-    ;; Swap bindings in Evil's insert state for Eshell
-    (evil-define-key 'insert eshell-mode-map
-      (kbd "RET") #'eshell-send-input
-      (kbd "<return>") #'eshell-send-input
-      (kbd "C-RET") #'newline
-      (kbd "C-<return>") #'newline)))
-(add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
-(setq eshell-term-name "xterm-256color")
-
-;; -- ripgrep -----------------------------------------------
-(use-package rg)
-
-;; -- Session/Workspace Persistence -------------------------
+;;; session/workspace persistence
 (use-package tabspaces
-  :ensure t
-  :init
-  (require 'tabspaces)
   :config
   (tabspaces-mode 1)
   (setq tabspaces-use-filtered-buffers-as-default t
@@ -169,26 +225,17 @@
   ;; Remove the perspective binding for '/' so Evil search can claim it
   (define-key persp-mode-map (kbd "/") nil))
 
-(defun my/frame-isolated-eshell (&optional arg)
-  "Open or create an Eshell buffer unique to the current frame.
-  With a prefix ARG, prompts for a session name."
-  (interactive "P")
-  (let* ((frame-id (frame-parameter nil 'window-id))
-         (buf-name (format "*eshell-%s*" frame-id)))
-    (cond
-     (arg (call-interactively #'eshell))
-     (t (eshell buf-name)))))
+;;;; backups
+(setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
+(setq make-backup-files t)   ;; keep making backups
+(setq version-control t)     ;; use numbered backups (file.~1~, file.~2~, ...)
+(setq delete-old-versions t) ;; auto-delete old numbered backups
+(setq kept-new-versions 6)
+(setq kept-old-versions 2)
+(setq auto-save-file-name-transforms
+      `((".*" "~/.emacs.d/auto-save/" t)))
 
-;; Update your helper function for project eshell spawning as well
-(defun my/project-eshell ()
-  "Open a frame-isolated Eshell in the current project root."
-  (interactive)
-  (let ((default-directory (if (fboundp 'projectile-project-root)
-                               (or (ignore-errors (projectile-project-root)) default-directory)
-                             default-directory)))
-    (my/frame-isolated-eshell)))
-
-;; -- Yank Flymake Error at Point ----------------------------
+;;; custom commands
 (defun my/yank-flymake-error ()
   "Copy the flymake diagnostic message at point to clipboard."
   (interactive)
@@ -215,7 +262,29 @@
       (tab-bar-close-tab)
     (message "Tab deletion canceled.")))
 
-;; -- General.el (Leader Key) --------------------------------
+;;;; eshell fix
+(defun my/eshell-swap-return-keys ()
+  (with-eval-after-load 'evil-collection-eshell
+    ;; Swap bindings in Evil's insert state for Eshell
+    (evil-define-key 'insert eshell-mode-map
+      (kbd "RET") #'eshell-send-input
+      (kbd "<return>") #'eshell-send-input
+      (kbd "C-RET") #'newline
+      (kbd "C-<return>") #'newline)))
+(add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
+(setq eshell-term-name "xterm-256color")
+
+(defun my/frame-isolated-eshell (&optional arg)
+  "Open or create an Eshell buffer unique to the current frame.
+  With a prefix ARG, prompts for a session name."
+  (interactive "P")
+  (let* ((frame-id (frame-parameter nil 'window-id))
+         (buf-name (format "*eshell-%s*" frame-id)))
+    (cond
+     (arg (call-interactively #'eshell))
+     (t (eshell buf-name)))))
+
+;;; general.el (Leader Key)
 (use-package general
   :config
   ;; Main leader
@@ -465,7 +534,7 @@
     ;; Priority
     "P"   '(org-priority :which-key "Set priority")
 
-    ;; -- Tables (b) -----------------------------------------------
+    ;;; Tables (b) -----------------------------------------------
     "b-"   '(org-table-insert-hline :which-key "Insert hline")
     "bir"  '(org-table-insert-row :which-key "Insert row")
     "bic"  '(org-table-insert-column :which-key "Insert column")
@@ -483,69 +552,16 @@
     "'"   '(org-edit-src-code :which-key "Edit src block")
     "RET" '(org-open-at-point :which-key "Follow link")))
 
-;; -- Which-key (Built-in 30.2) ------------------------------
-(use-package which-key
-  :ensure nil                       ; Tells Emacs not to download it from MELPA since it's built-in
-  :init
-  (setq which-key-idle-delay 0.2)   ; Set your preferred delay here (e.g., 0.0 for instant popup)
-  :config
-  (setq which-key-side-window-location 'bottom
-        which-key-popup-type 'side-window
-        which-key-side-window-max-height 0.25
-        which-key-separator " ? "
-        which-key-prefix-prefix "")
-  (which-key-mode 1))
-
-;; -- Catppuccin Theme ---------------------------------------
-(use-package catppuccin-theme
-  :config
-  (setq catppuccin-flavor 'macchiato)
-  (load-theme 'catppuccin t))
-
-;; -- SPC overrides ------------------------------------------
+;;;; SPC overrides in special buffers
 (with-eval-after-load 'dired
   (general-def :states 'normal :keymaps 'dired-mode-map
     "SPC" general-override-mode-map))
-
 (with-eval-after-load 'help-mode
   (general-def :states 'normal :keymaps 'help-mode-map
     "SPC" general-override-mode-map))
 
-;; --- Two-Tier Workspace/Buffer Tabs ---
-(use-package tab-bar
-  :ensure nil
-  :init
-  (tab-bar-mode 1)
-  :custom
-  (tab-bar-new-tab-to 'rightmost)
-  :config
-  ;; --- Enhance Active Tab Visibility ---
-  (with-eval-after-load 'catppuccin-theme
-    (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
-          (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
-          (bg-inactive  "#24273a")  ; Macchiato Surface
-          (fg-inactive  "#cad3f5")) ; Macchiato Text
-      ;; Styling for the currently active tab
-      (set-face-attribute 'tab-bar-tab nil
-                          :background bg-active
-                          :foreground fg-active
-                          :weight 'bold
-                          :box `(:line-width (6 . 3) :color ,bg-active))
-      ;; Styling for all inactive tabs
-      (set-face-attribute 'tab-bar-tab-inactive nil
-                          :background bg-inactive
-                          :foreground fg-inactive
-                          :weight 'normal
-                          :box `(:line-width (6 . 3) :color ,bg-inactive))
-      ;; Styling for the empty remaining space behind the tabs
-      (set-face-attribute 'tab-bar nil
-                          :background "#181926" ; Darker crust color
-                          :foreground fg-inactive))))
-
-;; -- tldr ---------------------------------------------------
-(use-package tldr)
-
-;; -- Org Mode -----------------------------------------------
+;;; org mode
+;;;; general setup
 (setq org-directory "~/org")
 
 ;; With use-package + straight or elpaca:
@@ -556,7 +572,8 @@
   (org-modern-list '((?- . "•") (?+ . "◦") (?* . "▸")))  ; list markers
   (org-modern-checkbox '((?  . "☐") (?X . "☑") (?- . "◫")))
   (org-modern-table t)
-  (org-modern-block-name t))
+  (org-modern-block-name t)
+  (org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
 
 (setq org-hide-leading-stars t)
 (setq org-startup-indented t)
@@ -571,7 +588,6 @@
             "#+date: " (format-time-string "<%Y-%m-%d %a %H:%M>") "\n\n")))
 
 (add-hook 'find-file-hook #'my/auto-insert-org-template)
-(add-hook 'org-mode-hook 'org-indent-mode)
 
 (setq org-log-done 'time)
 (setq org-return-follows-link t)
@@ -589,6 +605,7 @@
 (with-eval-after-load 'org
   (define-key org-mode-map (kbd "DEL") #'my/org-smart-backspace))
 
+;;;; org special export without html links
 (use-package ox-gfm
   :after org
   :config
@@ -634,7 +651,7 @@
   (add-to-list 'org-export-filter-final-output-functions
                #'my/ox-gfm-fix-links))
 
-;; -- Org Mode Header Sizes ----------------------------------
+;;;; org mode header sizes
 (with-eval-after-load 'org
   (set-face-attribute 'org-level-1 nil :height 1.4 :weight 'bold)
   (set-face-attribute 'org-level-2 nil :height 1.3 :weight 'bold)
@@ -643,36 +660,7 @@
   (set-face-attribute 'org-level-5 nil :height 1.0)
   (set-face-attribute 'org-document-title nil :height 1.6 :weight 'bold))
 
-;; -- Projectile ---------------------------------------------
-(use-package projectile
-  :config
-  (projectile-mode 1)
-  (setq projectile-project-search-path '("/mnt/c/work/projects/"))
-  (setq projectile-enable-caching 'persistent)
-  (setq projectile-auto-update-cache t))
-
-;; -- Arrow replacement via post-insert hook -----------------
-(defvar my/arrow-replacements
-  '(("-->"  . #x2192)
-    ("<--"  . #x2190)
-    ("==>"  . #x21D2)
-    ("<=="  . #x21D0)
-    ("<=>"  . #x27FA)
-    ("->>"  . #x21A0)
-    ("<<-"  . #x219E)
-    ("..."  . #x2026)))
-
-(defun my/replace-arrows ()
-  "Replace arrow sequences with Unicode characters."
-  (dolist (pair my/arrow-replacements)
-    (let ((arrow (car pair))
-          (char (cdr pair)))
-      (when (looking-back (regexp-quote arrow) (- (point) (length arrow)))
-        (delete-char (- (length arrow)))
-        (insert (string char))))))
-(add-hook 'post-self-insert-hook #'my/replace-arrows)
-
-;; -- Org Capture Templates ----------------------------------
+;;;; org capture templates
 (setq org-capture-templates
     '(
     ("m" "Meeting" entry 
@@ -699,17 +687,7 @@
      :empty-lines 0))
     )
 
-;; -- Backups ------------------------------------------------
-(setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
-(setq make-backup-files t)   ;; keep making backups
-(setq version-control t)     ;; use numbered backups (file.~1~, file.~2~, ...)
-(setq delete-old-versions t) ;; auto-delete old numbered backups
-(setq kept-new-versions 6)
-(setq kept-old-versions 2)
-(setq auto-save-file-name-transforms
-      `((".*" "~/.emacs.d/auto-save/" t)))
-
-;; -- Org Export Directory -----------------------------------
+;;;; org export directory
 (setq org-export-output-file-name-function
       (lambda (extension &optional subtreep pub-dir)
         (expand-file-name
@@ -719,7 +697,7 @@
              (make-directory dir t))
            dir))))
 
-;; TODO states
+;;;; org TODO states
 (setq org-todo-keywords
       '((sequence "TODO(t)" "PLANNING(p)" "IN-PROGRESS(i@/!)" "VERIFYING(v!)" "BLOCKED(b@)"  "|" "DONE(d!)" "OBE(o@!)" "WONT-DO(w@/!)" )
         ))
@@ -736,7 +714,7 @@
         ("WONT-DO"     . (:background "LimeGreen"  :foreground "black" :weight bold))
         ))
 
-;; Fancy css
+;;;; org html export fancy css
 (setq org-html-head 
       "<style>
         body {
@@ -758,19 +736,70 @@
         .done { color: #5cb85c; font-weight: bold; }
        </style>")
 
-;; Tell org-agenda which files to scan
+;;;; org agenda setup
 (setq org-agenda-files '("~/org/todo.org"
                           "~/org/meetings"
                           "~/org/notes.org"))
 
-;; -- Evil Org (proper Doom-like org keybinds) ---------------
-(use-package evil-org
-  :after (evil org)
-  :hook (org-mode . evil-org-mode)
+;;; additional packages
+;;;; which-key
+(use-package which-key
+  :init
+  (setq which-key-idle-delay 0.2)   ; Set your preferred delay here (e.g., 0.0 for instant popup)
   :config
-  (evil-org-set-key-theme '(navigation insert textobjects additional todo calendar return)))
+  (setq which-key-side-window-location 'bottom
+        which-key-popup-type 'side-window
+        which-key-side-window-max-height 0.25
+        which-key-separator " ? "
+        which-key-prefix-prefix "")
+  (which-key-mode 1))
 
-;; -- Spellcheck ---------------------------------------------
+;;;; catppuccin Theme
+(use-package catppuccin-theme
+  :config
+  (setq catppuccin-flavor 'macchiato)
+  (load-theme 'catppuccin t))
+
+;;;; Two-Tier Workspace/Buffer Tabs
+(use-package tab-bar
+  :ensure nil
+  :init
+  (tab-bar-mode 1)
+  :custom
+  (tab-bar-new-tab-to 'rightmost)
+  :config
+  ;; Enhance Active Tab Visibility
+  (let ((bg-active    (catppuccin-get-color 'mauve))    ; Active tab background
+        (fg-active    (catppuccin-get-color 'crust))    ; Active tab text
+        (bg-inactive  (catppuccin-get-color 'surface0)) ; Inactive tab background (Tone 1)
+        (fg-inactive  (catppuccin-get-color 'text))     ; Inactive tab text
+        (bg-bar       (catppuccin-get-color 'crust)))   ; Empty bar background (Tone 2)
+    ;; Styling for the currently active tab
+    (set-face-attribute 'tab-bar-tab nil
+                        :background bg-active
+                        :foreground fg-active
+                        :weight 'bold
+                        :box `(:line-width (6 . 3) :color ,bg-active))
+    ;; Styling for all inactive tabs
+    (set-face-attribute 'tab-bar-tab-inactive nil
+                        :background bg-inactive
+                        :foreground fg-inactive
+                        :weight 'normal
+                        :box `(:line-width (6 . 3) :color ,bg-inactive))
+    ;; Styling for the empty remaining space behind the tabs
+    (set-face-attribute 'tab-bar nil
+                        :background bg-bar
+                        :foreground fg-inactive)))
+
+;;;; projectile
+(use-package projectile
+  :config
+  (projectile-mode 1)
+  (setq projectile-project-search-path '("~/work/projects/"))
+  (setq projectile-enable-caching 'persistent)
+  (setq projectile-auto-update-cache t))
+
+;;;; spellcheck
 (use-package flyspell
   :ensure nil ; Built-in package
   :hook ((text-mode . flyspell-mode)
@@ -781,13 +810,10 @@
   ;; Optimizations
   (setq flyspell-issue-message-flag nil
         flyspell-issue-welcome-flag nil)
-  (setq ispell-dictionary "en_US")
-  (setq ispell-local-dictionary "en_US")
-  (setq flyspell-default-dictionary "en_US")
   (setq ispell-local-dictionary-alist
         '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8))))
 
-;; -- Centered Cursor ----------------------------------------
+;;;; centered cursor
 (use-package centered-cursor-mode
   :config
   (global-centered-cursor-mode 1)
@@ -796,28 +822,53 @@
               (when (derived-mode-p 'term-mode 'eshell-mode)
                 (centered-cursor-mode -1)))))
 
-;; -- Vertico (vertical completion UI) ----------------------
+;;;; vertico (vertical completion UI)
 (use-package vertico
   :init
   (vertico-mode 1)
   (setq vertico-count 15))        ; show 15 candidates at once
 
-;; -- Orderless (fuzzy/flex matching) -----------------------
+;;;; orderless (fuzzy/flex matching)
 (use-package orderless
   :config
   (setq completion-styles '(orderless basic)
         completion-category-overrides
         '((file (styles basic partial-completion)))))
 
-;; -- Magit -------------------------------------------------
-(use-package magit)
+;;;; magit
+(use-package magit
+  :init
+  (setq vc-handled-backends '(Git))
+  :config
+  (magit-auto-revert-mode 1)
+  ;; Explicitly refresh status buffer on save (useful for non-standard file watchers/TRAMP/WSL)
+  (add-hook 'after-save-hook #'magit-after-save-refresh-status)
+  ;; Unbind SPC in Magit keymaps so Leader key works seamlessly
+  (dolist (map (list magit-mode-map
+                     magit-status-mode-map
+                     magit-log-mode-map
+                     magit-diff-mode-map
+                     magit-refs-mode-map
+                     magit-revision-mode-map))
+    (define-key map (kbd "SPC") nil))
+  (evil-define-key '(normal visual motion) magit-mode-map (kbd "SPC") nil)
+  (general-def :states 'normal :keymaps 'magit-mode-map
+    "<escape>" #'magit-mode-bury-buffer)
+  (with-eval-after-load 'git-commit
+    (general-def :states 'normal :keymaps 'git-commit-mode-map
+      "<escape>" #'with-editor-cancel)))
 
-;; -- Marginalia (annotations on candidates) ----------------
+(use-package transient
+  :config
+  (general-def :keymaps 'transient-base-map
+    "<escape>" #'transient-quit-one))
+
+;;;; marginalia (annotations on candidates)
 (use-package marginalia
   :init
   (marginalia-mode 1))
 
-;; -- Avy Jumper (Helix gw Emulator) ------------------------
+;;;; avy jumper (helix gw emulator)
 (use-package avy
   :config
   (setq avy-keys '(?a ?s ?d ?f ?j ?k ?l ?e ?r ?u ?i ?o ?w ?v ?c ?m))
@@ -829,65 +880,47 @@
       (avy-with my/helix-gw
         (avy-process (avy--regex-candidates "\\b[a-zA-Z0-9_]"))))))
 
-;; -- TCL Support --------------------------------------------
+;;;; TCL Support
 (use-package tcl
   :ensure nil
   :mode ("\\.tcl\\'" . tcl-mode)
   :config
   (setq tcl-indent-level 4))
 
-;; -- Verilog / SystemVerilog Support -------------------------
+;;;; verilog / SystemVerilog Support
 (use-package verilog-mode
   :ensure nil
   :mode (("\\.v\\'" . verilog-mode)
          ("\\.sv\\'" . verilog-mode))
-
+  :custom-face
+  (verilog-parameter-face ((t :foreground "#cee49f" :weight bold)))
+  (verilog-number-face    ((t :foreground "#f5a97f")))
   :config
-  ;; -- Verilog Mode -------------------------------------------
-  (setq verilog-linter "/usr/local/bin/verible-verilog-lint")
-
-  ;; Customizations to mimic Doom's clean formatting
-  (setq verilog-indent-level             4
-        verilog-indent-level-module      4
+  (setq verilog-linter "/usr/local/bin/verible-verilog-lint"
+        verilog-indent-level 4
+        verilog-indent-level-module 4
         verilog-indent-level-declaration 4
-        verilog-indent-level-behavioral  4
-        verilog-auto-endcomments         nil)) ; Disables noisy "endmodule // name" comments
+        verilog-indent-level-behavioral 4
+        verilog-auto-endcomments nil)
 
-(advice-add 'verilog-auto :after
-            (lambda (&rest _) (untabify (point-min) (point-max))))
+  (defun my/verilog-font-lock-setup ()
+    (font-lock-add-keywords nil
+      '(("\\b\\([A-Z][A-Z0-9_]+\\)\\b" 1 'verilog-parameter-face)
+        ("\\b\\([0-9]+\\('[bdh][0-9a-fA-FxXzZ_]+\\)?\\)\\b" 1 'verilog-number-face))
+      'append)) ; Use 'append so syntactic comment/string faces take precedence
 
-;; Define custom faces
-(defface verilog-parameter-face
-  '((t :foreground "#cee49f" :weight bold))
-  "Face for Verilog ALL_CAPS parameters/constants.")
+  (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup))
 
-(defface verilog-number-face
-  '((t :foreground "#f5a97f"))
-  "Face for Verilog numeric literals.")
-
-;; Apply via hook with prepend to override verilog-mode defaults
-(defun my/verilog-font-lock-setup ()
-  (font-lock-add-keywords nil
-    '(("\\b\\([A-Z][A-Z0-9_]+\\)\\b"
-       0 'verilog-parameter-face prepend)
-      ("\\b\\([0-9]+\\('[bdh][0-9a-fA-FxXzZ_]+\\)?\\)\\b"
-       0 'verilog-number-face prepend))
-    'prepend))
-
-(add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup)
-
-;; -- Powerline ----------------------------------------------
+;;;; powerline
 (use-package powerline
   :config
-  (powerline-center-evil-theme))
-
-(setq projectile-mode-line-prefix " Proj")
-(setq projectile-mode-line-function
+  (powerline-center-evil-theme)
+  (setq projectile-mode-line-prefix " ")
+  (setq projectile-mode-line-function
       (lambda ()
-        (format " Proj[%s]" (projectile-project-name))))
+        (format " [%s]" (projectile-project-name)))))
 
-
-;; -- Eglot + Verible (SystemVerilog LSP) -------------------
+;;;; eglot + verible (SystemVerilog LSP)
 (use-package eglot
   :hook (verilog-mode . eglot-ensure)
   :config
@@ -906,81 +939,31 @@
                               f))))))
   (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
 
-;; -- magit overrides --------------------------------------
-(with-eval-after-load 'magit (dolist (map (list magit-mode-map
-                     magit-status-mode-map
-                     magit-log-mode-map
-                     magit-diff-mode-map
-                     magit-refs-mode-map
-                     magit-revision-mode-map))
-    (define-key map (kbd "SPC") nil))
-  (general-def :states 'normal :keymaps 'magit-mode-map
-    "<escape>" #'magit-mode-bury-buffer)
-  (evil-define-key '(normal visual motion) magit-mode-map
-    (kbd "SPC") nil))
-(with-eval-after-load 'transient
-  (general-def :keymaps 'transient-base-map
-    "<escape>" #'transient-quit-one))
-(with-eval-after-load 'git-commit
-  (general-def :states 'normal :keymaps 'git-commit-mode-map
-    "<escape>" #'with-editor-cancel))
-
-;; These give the most speed with least feature loss
-(setq vc-handled-backends '(Git))
-(setq magit-auto-revert-mode nil)       ; press SPC b r manually after operations
-
-;; Go back to system git
-(setq magit-git-executable "git")
-
-;; -- Popup Bottom Windows (Doom-style) ---------------------
-(add-to-list 'display-buffer-alist
-  '("\\*scratch\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 0)
-    (window-height . 0.2)))
-
-(add-to-list 'display-buffer-alist
-  '("\\*Async Shell Command\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 1)
-    (window-height . 0.2)))
-
-(add-to-list 'display-buffer-alist
-  '("\\*eshell\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 2)
-    (window-height . 0.2)))
-
-(add-to-list 'display-buffer-alist
-  '("\\*terminal\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 3)
-    (window-height . 0.2)))
-
-;; -- Rainbow Delimiters -------------------------------------
+;;;; rainbow delimiters
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
 
-;; Force the base label face to not interfere
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
+;;;; tldr
+(use-package tldr)
 
+;;;; ripgrep
+(use-package rg)
+
+;;;; custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(avy catppuccin-theme centered-cursor-mode evil-collection
-	 evil-nerd-commenter evil-org evil-surround flyspell-correct
-	 general imenu-list magit marginalia minimap mood-line
-	 orderless org-modern ox-gfm perspective powerline projectile
-	 rainbow-delimiters rg sublimity tabspaces tldr vertico vterm)))
+   '(avy catppuccin-theme centered-cursor-mode evil-collection evil-mc
+	 evil-nerd-commenter evil-org evil-surround evil-vimish-fold
+	 general git-commit magit marginalia orderless org-modern
+	 ox-gfm perspective powerline projectile rainbow-delimiters rg
+	 tabspaces tldr vertico)))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
