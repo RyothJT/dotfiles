@@ -236,10 +236,6 @@
         (tab-bar-new-tab)
         (tab-bar-rename-tab choice)))))
 
-(with-eval-after-load 'perspective
-  ;; Remove the perspective binding for '/' so Evil search can claim it
-  (define-key persp-mode-map (kbd "/") nil))
-
 ;;;; backups
 (setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
 (setq make-backup-files t)   ;; keep making backups
@@ -332,7 +328,7 @@
     "f"   '(:ignore t :which-key "files")
     "ff"  '(find-file :which-key "Find file")
     "fF"  '(project-find-file :which-key "Find file")
-    "f/"  '(projectile-ripgrep :which-key "Find text in project")
+    "f/"  '(consult-ripgrep :which-key "Find text in project")
     "fh" '((lambda () (interactive) (find-file "~/")) :which-key "Find file from home")
     "fs"  '(save-buffer :which-key "Save file")
     "fS"  '(write-file :which-key "Save file as")
@@ -374,7 +370,7 @@
 
     ;; Buffers
     "b"   '(:ignore t :which-key "buffers")
-    "bb"  '(tabspaces-switch-to-buffer :which-key "Switch workspace buffer")
+    "bb"  '(consult-buffer :which-key "Switch workspace buffer")
     "bB"  '(switch-to-buffer :which-key "Switch global buffer")
     "bi"  '(ibuffer :which-key "List all buffers")
     "bd"  '(bury-buffer :which-key "Bury buffer")
@@ -406,9 +402,9 @@
 
     ;; Search
     "S"   '(:ignore t :which-key "search")
-    "Ss"  '(occur :which-key "Search buffer")
+    "Ss"  '(consult-line :which-key "Search line in buffer")
     "Sg"  '(grep :which-key "Grep")
-    "Si"  '(imenu :which-key "Jump to symbol")
+    "Si"  '(consult-imenu :which-key "Jump to symbol")
     "Sr"  '(query-replace :which-key "Find & replace buffer")
     "SR"  '(project-query-replace-regexp :which-key "Find & replace project")
 
@@ -967,6 +963,11 @@
                               f))))))
   (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
 
+;;;; consult - Search with live previews
+(use-package consult
+  :config
+  (setq consult-narrow-key "<"))
+
 ;;;; rainbow delimiters
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
@@ -987,11 +988,11 @@
    '("c4df9006b9eb32599d758800a32f3487c2cdf13826084511783b47d419024af2"
      default))
  '(package-selected-packages
-   '(avy catppuccin-theme centered-cursor-mode evil-collection
+   '(avy catppuccin-theme centered-cursor-mode consult evil-collection
 	 evil-goggles evil-mc evil-nerd-commenter evil-org
 	 evil-surround evil-vimish-fold general git-commit magit
-	 marginalia orderless org-modern ox-gfm perspective powerline
-	 projectile rainbow-delimiters rg tabspaces tldr vertico)))
+	 marginalia orderless org-modern ox-gfm powerline projectile
+	 rainbow-delimiters rg tabspaces tldr vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
