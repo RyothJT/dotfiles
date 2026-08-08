@@ -454,6 +454,7 @@
     "gw"  '(my/helix-gw :which-key "Jump to 3-char sequence")
     "gd"  '(xref-find-definitions :which-key "Go to definition")
     "gD"  '(xref-find-definitions-other-window :which-key "Definition other window")
+    "gl"  '(git-link :which-key "Copy web link to line")
 
     ;; Git (magit)
     "gi"   '(:ignore t :which-key "git")
@@ -887,6 +888,9 @@
   (add-hook 'magit-pre-refresh-hook  #'diff-hl-magit-pre-refresh)
   (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh))
 
+;;;; git-link
+(use-package git-link)
+
 ;;;; marginalia (annotations on candidates)
 (use-package marginalia
   :init
@@ -988,11 +992,11 @@
    '("c4df9006b9eb32599d758800a32f3487c2cdf13826084511783b47d419024af2"
      default))
  '(package-selected-packages
-   '(avy catppuccin-theme centered-cursor-mode consult evil-collection
+   '(avy catppuccin-theme centered-cursor-mode diff-hl evil-collection
 	 evil-goggles evil-mc evil-nerd-commenter evil-org
-	 evil-surround evil-vimish-fold general git-commit magit
-	 marginalia orderless org-modern ox-gfm powerline projectile
-	 rainbow-delimiters rg tabspaces tldr vertico)))
+	 evil-surround evil-vimish-fold general git-commit git-link
+	 magit marginalia orderless org-modern ox-gfm powerline
+	 projectile rainbow-delimiters rg tabspaces tldr vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
