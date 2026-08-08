@@ -973,7 +973,9 @@
   (setq projectile-mode-line-prefix " ")
   (setq projectile-mode-line-function
       (lambda ()
-        (format " [%s]" (projectile-project-name)))))
+        (format " [%s]" (projectile-project-name))))
+  (set-face-attribute 'mode-line nil :height 1.2)
+  (set-face-attribute 'mode-line-inactive nil :height 1.2))
 
 ;;;; eglot + verible (SystemVerilog LSP)
 (use-package eglot
