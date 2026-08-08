@@ -794,7 +794,7 @@
   :init
   (tab-bar-mode 1)
   :custom
-  (tab-bar-new-tab-to 'rightmost)
+  (tab-bar-new-tab-to 'right)
   :config
   ;; Enhance Active Tab Visibility
   (let ((bg-active    (catppuccin-get-color 'mauve))    ; Active tab background
