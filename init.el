@@ -1,24 +1,25 @@
-;; -- Garbage collection ------------------------------------
+;;; garbage collection
 (setq gc-cons-threshold (* 100 1024 1024)) ; 100 MB
 ;; Reset it to a reasonable background level after startup completes
 (add-hook 'emacs-startup-hook
           (lambda ()
             (setq gc-cons-threshold (* 8 1024 1024)))) ; 8 MB
 
-;; -- Package Setup ------------------------------------------
+;;; package setup
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
 (setq use-package-always-ensure t)
-
 (unless package-archive-contents
   (package-refresh-contents))
 
-;; -- Identity -----------------------------------------------
+;;; identity
 (setq user-full-name "Justin Troth"
       user-mail-address "justin.troth@gd-ms.com")
 
-;; -- UI -----------------------------------------------------
+;;; ui
+
+;;;; menus and layout
 (menu-bar-mode -1)
 (tool-bar-mode -1)
 (scroll-bar-mode t)
@@ -27,24 +28,26 @@
 (add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
 (setopt display-fill-column-indicator-column 80)
 
-;; Window size at launch
+;;;; Window size at launch
 (setq initial-frame-alist '((width . 180) (height . 41)))
 (setq default-frame-alist initial-frame-alist)
 
-;; Maximize
-(add-to-list 'initial-frame-alist '(fullscreen . maximized))
-
-;; Soft wrap + navigate visual lines (not logical lines)
+;;;; Soft wrap + navigate visual lines (not logical lines)
 (global-visual-line-mode 1)
 (setq-default truncate-lines nil)
 
-;; Auto revert buffers, ask when modified
+;;;; Auto revert buffers, ask when modified
 (setq global-auto-revert-mode t)
 (save-place-mode 1)
-
 (undelete-frame-mode 1)
 
-;; -- Font ---------------------------------------------------
+;;;; tabs
+(global-tab-line-mode 1)
+(setq tab-line-tab-name-function #'tab-line-tab-name-buffer)
+;; Built-in buffer exclusion matching regex pattern for '*' buffers
+(setq tab-line-exclude-buffers '("\\`\\*.*\\*'"))
+
+;;;; font
 (set-face-attribute 'default nil
   :font "JetBrains Mono"
   :height 100)
@@ -52,43 +55,73 @@
 ;; Fallback for unicode characters
 (set-fontset-font t 'unicode "Noto Sans" nil 'append)
 
-;; -- Skip special buffers with H/L -------------------------
-(defun my/next-buffer ()
-  "Go to the next valid user buffer in the current perspective."
-  (interactive)
-  (let* ((all-buffers (persp-current-buffer-names))
-         ;; Filter out any internal system buffers starting with *
-         (clean-list (cl-remove-if (lambda (name) (string-match-p "^\\*" name)) all-buffers))
-         (current-name (buffer-name (current-buffer)))
-         (rotated-list (append (cdr (member current-name clean-list)) clean-list))
-         (chosen nil))
-    (dolist (name rotated-list)
-      (when (and (not chosen)
-                 (not (string-equal name current-name)))
-        (setq chosen name)))
-    (if chosen
-        (switch-to-buffer chosen)
-      (message "No other user buffers in this perspective."))))
+;;;; arrow replacement via post-insert hook
+(defvar my/arrow-replacements
+  '(("-->"  . #x2192)
+    ("<--"  . #x2190)
+    ("==>"  . #x21D2)
+    ("<=="  . #x21D0)
+    ("<=>"  . #x27FA)
+    ("->>"  . #x21A0)
+    ("<<-"  . #x219E)
+    ("..."  . #x2026)))
 
-(defun my/prev-buffer ()
-  "Go to the previous valid user buffer in the current perspective."
-  (interactive)
-  (let* ((all-buffers (persp-current-buffer-names))
-         ;; Filter out any internal system buffers starting with *
-         (clean-list (cl-remove-if (lambda (name) (string-match-p "^\\*" name)) all-buffers))
-         (reversed-list (reverse clean-list))
-         (current-name (buffer-name (current-buffer)))
-         (rotated-list (append (cdr (member current-name reversed-list)) reversed-list))
-         (chosen nil))
-    (dolist (name rotated-list)
-      (when (and (not chosen)
-                 (not (string-equal name current-name)))
-        (setq chosen name)))
-    (if chosen
-        (switch-to-buffer chosen)
-      (message "No other user buffers in this perspective."))))
+(defun my/replace-arrows ()
+  "Replace arrow sequences with Unicode characters."
+  (dolist (pair my/arrow-replacements)
+    (let ((arrow (car pair))
+          (char (cdr pair)))
+      (when (looking-back (regexp-quote arrow) (- (point) (length arrow)))
+        (delete-char (- (length arrow)))
+        (insert (string char))))))
+(add-hook 'post-self-insert-hook #'my/replace-arrows)
 
-;; -- Evil Mode ----------------------------------------------
+;;;; outline
+(defface my/outline-header-face
+  '((t :background "#363a4f" :weight bold))
+  "Highlighted background for outline section headers.")
+(add-hook 'emacs-lisp-mode-hook
+          (lambda ()
+            (setq-local outline-regexp ";;;+")
+            (outline-minor-mode 1)
+            (font-lock-add-keywords nil
+              '(("^;;;+.*$" 0 'my/outline-header-face prepend)))))
+(with-eval-after-load 'outline
+  (evil-define-key 'normal outline-minor-mode-map
+    (kbd "TAB") #'outline-cycle
+    (kbd "<backtab>") #'outline-cycle-buffer))
+
+;;;; popup bottom windows (Doom-style)
+(add-to-list 'display-buffer-alist
+  '("\\*scratch\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 0)
+    (window-height . 0.2)))
+
+(add-to-list 'display-buffer-alist
+  '("\\*Async Shell Command\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 1)
+    (window-height . 0.2)))
+
+(add-to-list 'display-buffer-alist
+  '("\\*eshell\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 2)
+    (window-height . 0.2)))
+
+(add-to-list 'display-buffer-alist
+  '("\\*terminal\\*"
+    (display-buffer-in-side-window)
+    (side . bottom)
+    (slot . 3)
+    (window-height . 0.2)))
+
+;;; evil mode
+;;;; evil package
 (use-package evil
   :init
   (setq evil-want-integration t)
@@ -102,78 +135,81 @@
   (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
   (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
   (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
-  (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line))
-
-;; 1. Make the normal/motion state maps act as high-priority intercepts
+  (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
 (evil-make-intercept-map evil-normal-state-map)
-(evil-make-intercept-map evil-motion-state-map)
+(evil-make-intercept-map evil-motion-state-map))
 
-;; 2. Bind your universal buffer navigation keys
-(define-key evil-normal-state-map (kbd "H") #'my/next-buffer)
-(define-key evil-normal-state-map (kbd "L") #'my/prev-buffer)
-(define-key evil-motion-state-map (kbd "H") #'my/next-buffer)
-(define-key evil-motion-state-map (kbd "L") #'my/prev-buffer)
-
-(defun my/eshell-swap-return-keys ()
-  "Swap RET and C-RET at the input translation level in Eshell."
-  (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map key-translation-map)
-    ;; Translate physical Enter -> C-RET
-    (define-key map (kbd "RET") (kbd "C-RET"))
-    (define-key map (kbd "<return>") (kbd "C-RET"))
-    ;; Translate physical Ctrl+Enter -> RET
-    (define-key map (kbd "C-RET") (kbd "RET"))
-    (define-key map (kbd "C-<return>") (kbd "RET"))
-    (setq-local key-translation-map map)))
-
-(add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
-
-;; -- Evil Collection ----------------------------------------
+;;;; evil collection
 (use-package evil-collection
   :after evil
   :config
   (evil-collection-init))
 
-;; -- Evil Nerd Commenter (gcc, gc, gcp, etc) ---------------
+;;;; evil nerd commenter (gcc, gc, gcp, etc)
 (use-package evil-nerd-commenter
   :after evil
   :config
-  (evilnc-default-hotkeys nil t)
-  ;; Explicitly bind gc operator in normal and visual
   (define-key evil-normal-state-map (kbd "gc") 'evilnc-comment-operator)
   (define-key evil-visual-state-map (kbd "gc") 'evilnc-comment-operator))
 
-;; -- Evil Surround (ys, cs, ds) ----------------------------
+;;;; evil surround (ys, cs, ds)
 (use-package evil-surround
   :after evil
   :config
   (global-evil-surround-mode 1))
 
-;; -- Session/Workspace Persistence -------------------------
-(use-package perspective
+;;;; evil-mc
+(use-package evil-mc
+  :after evil
   :config
-  (setq persp-suppress-no-prefix-key-warning t)
-  (persp-mode 1)
-  ;; Restores the "+" button on the tab bar
-  (setq perspective-show-modestring nil)
-  (tab-bar-mode 1)
-  (setq tab-bar-format '(tab-bar-format-history 
-                         tab-bar-format-tabs 
-                         tab-bar-format-add-tab
-                         tab-bar-format-align-right 
-                         tab-bar-format-global))
-  ;; Native Perspective Session Saving (Replaces desktop-mode safely)
-  (setq persp-state-default-file (expand-file-name "persp-state" user-emacs-directory))
-  ;; Auto-save your workspaces and buffers on exit
-  (add-hook 'kill-emacs-hook #'persp-state-save))
+  (global-evil-mc-mode 1)
+  (evil-define-key '(normal visual) 'global
+    (kbd "C-S-j") #'evil-mc-make-cursor-move-next-line
+    (kbd "C-S-k") #'evil-mc-make-cursor-move-prev-line
+    "," #'evil-mc-undo-all-cursors))
+(setq native-comp-async-report-warnings-errors nil)
 
-(with-eval-after-load 'perspective
-  ;; Remove the perspective binding for '/' so Evil search can claim it
-  (define-key persp-mode-map (kbd "/") nil))
+;;;; evil org (proper Doom-like org keybinds)
+(use-package evil-org
+  :after (evil org)
+  :hook (org-mode . evil-org-mode)
+  :config
+  (evil-org-set-key-theme '(navigation insert textobjects additional todo calendar return)))
 
+;;; Top-Priority Global Tab Navigation
+(defvar my/tab-line-override-map (make-sparse-keymap))
+(define-key my/tab-line-override-map (kbd "H") #'tab-line-switch-to-prev-tab)
+(define-key my/tab-line-override-map (kbd "L") #'tab-line-switch-to-next-tab)
+(define-minor-mode my/tab-line-override-mode
+  "Global minor mode to force H and L tab-line navigation."
+  :global t
+  :keymap my/tab-line-override-map)
+(my/tab-line-override-mode 1)
+(add-to-list 'emulation-mode-map-alists
+             `((my/tab-line-override-mode . ,my/tab-line-override-map)))
+
+;; Disable in insert mode, enable in all other evil states
+(dolist (hook '(evil-insert-state-entry-hook minibuffer-setup-hook))
+  (add-hook hook (lambda () (my/tab-line-override-mode -1))))
+(dolist (hook '(evil-insert-state-exit-hook minibuffer-exit-hook))
+  (add-hook hook (lambda () (my/tab-line-override-mode 1))))
+
+;;; eshell fix
+(defun my/eshell-swap-return-keys ()
+  (with-eval-after-load 'evil-collection-eshell
+    ;; Swap bindings in Evil's insert state for Eshell
+    (evil-define-key 'insert eshell-mode-map
+      (kbd "RET") #'eshell-send-input
+      (kbd "<return>") #'eshell-send-input
+      (kbd "C-RET") #'newline
+      (kbd "C-<return>") #'newline)))
+(add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys)
+(setq eshell-term-name "xterm-256color")
+
+;;;; custom eshell functions
 (defun my/frame-isolated-eshell (&optional arg)
   "Open or create an Eshell buffer unique to the current frame.
-With a prefix ARG, prompts for a session name."
+  With a prefix ARG, prompts for a session name."
   (interactive "P")
   (let* ((frame-id (frame-parameter nil 'window-id))
          (buf-name (format "*eshell-%s*" frame-id)))
@@ -190,24 +226,50 @@ With a prefix ARG, prompts for a session name."
                              default-directory)))
     (my/frame-isolated-eshell)))
 
-(defun my/persp-kill-or-remove-current-buffer ()
-  "Remove current buffer from the perspective and let perspective.el handle the global kill if unreferenced."
-  (interactive)
-  (let* ((buf (current-buffer))
-         (buf-name (buffer-name buf))
-         ;; Gather other valid user buffers in this perspective
-         (all-buffers (persp-current-buffer-names))
-         (clean-list (cl-remove-if (lambda (name) (string-match-p "^\\*" name)) all-buffers))
-         (sibling-user-buffers (cl-remove buf-name clean-list :test #'string-equal))
-         (target-fallback (car sibling-user-buffers)))
-    ;; 1. Evacuate the window safely within local isolation bounds first
-    (if target-fallback
-        (switch-to-buffer target-fallback)
-      (switch-to-buffer "*scratch*"))
-    ;; 2. Hand off the target buffer to perspective's internal reference engine
-    (persp-remove-buffer buf)))
+;;; session/workspace persistence
+(use-package tabspaces
+  :ensure t
+  :init
+  (require 'tabspaces)
+  :config
+  (tabspaces-mode 1)
+  (setq tabspaces-use-filtered-buffers-as-default t
+        tabspaces-default-tab "Main"
+        tabspaces-initialize-project-with-todo nil)
+  ;; Automatically save and restore desktop session (tabs, windows, buffers)
+  (setq desktop-path (list user-emacs-directory)
+        desktop-dirname user-emacs-directory
+        desktop-base-filename "emacs.desktop"
+        desktop-files-not-to-save "^$"
+        desktop-load-locked-desktop t)
+  (desktop-save-mode 1))
 
-;; -- Yank Flymake Error at Point ----------------------------
+(defun my/tab-bar-select-or-create ()
+  "Prompt with Vertico for existing tabs. Switch if chosen, or create a new tab if novel."
+  (interactive)
+  (let* ((existing-tabs (mapcar (lambda (tab) (alist-get 'name tab)) (tab-bar-tabs)))
+         (choice (completing-read "Switch or Create Tab: " existing-tabs)))
+    (if (member choice existing-tabs)
+        (tab-bar-select-tab-by-name choice)
+      (when (not (string-empty-p choice))
+        (tab-bar-new-tab)
+        (tab-bar-rename-tab choice)))))
+
+(with-eval-after-load 'perspective
+  ;; Remove the perspective binding for '/' so Evil search can claim it
+  (define-key persp-mode-map (kbd "/") nil))
+
+;;;; backups
+(setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
+(setq make-backup-files t)   ;; keep making backups
+(setq version-control t)     ;; use numbered backups (file.~1~, file.~2~, ...)
+(setq delete-old-versions t) ;; auto-delete old numbered backups
+(setq kept-new-versions 6)
+(setq kept-old-versions 2)
+(setq auto-save-file-name-transforms
+      `((".*" "~/.emacs.d/auto-save/" t)))
+
+;;; custom commands
 (defun my/yank-flymake-error ()
   "Copy the flymake diagnostic message at point to clipboard."
   (interactive)
@@ -217,22 +279,15 @@ With a prefix ARG, prompts for a session name."
         (message "Copied: %s" msg))
     (message "No diagnostic at point.")))
 
-;; Yank last minibuffer message to clipboard
-(defun my/yank-last-message ()
-  "Copy the last message from the minibuffer to clipboard."
+(defun my/yank-last-five-messages ()
+  "Copy the last 5 messages from the *Messages* buffer to the clipboard."
   (interactive)
-  (let ((msg (current-message)))
-    (if msg
-        (progn (kill-new msg)
-               (message "Copied: %s" msg))
-      (message "No message to copy."))))
-
-(defun my/switch-to-buffer ()
-  "Switch to a perspective buffer, filtering out special buffers."
-  (interactive)
-  (let ((completion-regexp-list (cons "^[^*]" completion-regexp-list)))
-    (persp-switch-to-buffer* 
-     (persp-read-buffer "Switch to buffer: " nil t))))
+  (let ((msgs (with-current-buffer "*Messages*"
+                (buffer-substring-no-properties
+                 (save-excursion (goto-char (point-max)) (forward-line -5) (point))
+                 (point-max)))))
+    (kill-new msgs)
+    (message "Copied last 5 messages.")))
 
 (defun my/safely-close-workspace ()
   "Prompt the user to explicitly confirm before destroying the active workspace."
@@ -241,7 +296,7 @@ With a prefix ARG, prompts for a session name."
       (tab-bar-close-tab)
     (message "Tab deletion canceled.")))
 
-;; -- General.el (Leader Key) --------------------------------
+;;; general.el (Leader Key)
 (use-package general
   :config
   ;; Main leader
@@ -261,22 +316,20 @@ With a prefix ARG, prompts for a session name."
     ;; Top Level
     "SPC" '(find-file :which-key "Find file")
     ":"   '(execute-extended-command :which-key "M-x")
-    ","   '(my/switch-to-buffer :which-key "Switch buffer")
     "/"   '(grep :which-key "Search project")
-    ";"   '(evilnc-comment-operator :which-key "Comment")
 
     ;; Quit / Session
     "q"   '(:ignore t :which-key "quit/session")
     "qq"  '(save-buffers-kill-terminal :which-key "Quit Emacs")
-    "qs"  '(persp-state-save :which-key "Save session")
-    "ql"  '(persp-state-load :which-key "Load session")
+    "qs"  '(desktop-save :which-key "Save session")
+    "ql"  '(desktop-read :which-key "Load session")
     "qr"  '(restart-emacs :which-key "Restart Emacs")
 
     ;; Files
     "f"   '(:ignore t :which-key "files")
     "ff"  '(find-file :which-key "Find file")
     "fF"  '(project-find-file :which-key "Find file")
-    "f/"  '(project-find-ripgrep :which-key "Find text in project")
+    "f/"  '(projectile-ripgrep :which-key "Find text in project")
     "fh" '((lambda () (interactive) (find-file "~/")) :which-key "Find file from home")
     "fs"  '(save-buffer :which-key "Save file")
     "fS"  '(write-file :which-key "Save file as")
@@ -318,14 +371,14 @@ With a prefix ARG, prompts for a session name."
 
     ;; Buffers
     "b"   '(:ignore t :which-key "buffers")
-    "bb"  '(my/switch-to-buffer :which-key "Switch buffer")
+    "bb"  '(tabspaces-switch-to-buffer :which-key "Switch workspace buffer")
+    "bB"  '(switch-to-buffer :which-key "Switch global buffer")
     "bi"  '(ibuffer :which-key "List all buffers")
-    "bd"  '(my/persp-kill-or-remove-current-buffer :which-key "Remove buffer from frame")
-    "bc"  '(my/persp-kill-or-remove-current-buffer :which-key "Remove buffer from frame")
-    "bn"  '(next-buffer :which-key "Next buffer")
-    "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
-    "bp"  '(previous-buffer :which-key "Prev buffer")
+    "bd"  '(bury-buffer :which-key "Bury buffer")
+    "bc"  '(tabspaces-remove-selected-buffer :which-key "Remove buffer from workspace")
+    "bk"  '(kill-current-buffer :which-key "Remove buffer from workspace")
     "br"  '(revert-buffer :which-key "Revert buffer")
+    "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
 
     ;; Windows
     "w"   '(:ignore t :which-key "windows")
@@ -341,13 +394,20 @@ With a prefix ARG, prompts for a session name."
     "wf"  '(toggle-frame-fullscreen :which-key "Fullscreen")
     "wc"  '(delete-window :which-key "Delete current window")
 
+    ;; Spellchecking
+    "s"   '(:ignore t :which-key "spellcheck")
+    "st"  '(flyspell-mode :which-key "Toggle spellcheck")
+    "sb"  '(flyspell-buffer :which-key "Spellcheck buffer")
+    "sn"  '(flyspell-goto-next-error :which-key "Next spelling error")
+    "sc"  '(flyspell-correct-wrapper :which-key "Correct word at point")
+
     ;; Search
-    "s"   '(:ignore t :which-key "search")
-    "ss"  '(occur :which-key "Search buffer")
-    "sg"  '(grep :which-key "Grep")
-    "si"  '(imenu :which-key "Jump to symbol")
-    "sr"  '(query-replace :which-key "Find & replace buffer")
-    "sR"  '(project-query-replace-regexp :which-key "Find & replace project")
+    "S"   '(:ignore t :which-key "search")
+    "Ss"  '(occur :which-key "Search buffer")
+    "Sg"  '(grep :which-key "Grep")
+    "Si"  '(imenu :which-key "Jump to symbol")
+    "Sr"  '(query-replace :which-key "Find & replace buffer")
+    "SR"  '(project-query-replace-regexp :which-key "Find & replace project")
 
     ;; Help
     "h"   '(:ignore t :which-key "help")
@@ -358,7 +418,7 @@ With a prefix ARG, prompts for a session name."
     "ha"  '(apropos-command :which-key "Find commands")
     "hw"  '(woman :which-key "Man page (woman)")
     "hr"  '((lambda () (interactive) (load-file user-init-file)) :which-key "Reload config")
-    "hy" '(my/yank-last-message :which-key "Yank last message")
+    "hy"  '(my/yank-last-five-messages :which-key "Yank last message")
 
     ;; Code
     "c"   '(:ignore t :which-key "code")
@@ -416,27 +476,20 @@ With a prefix ARG, prompts for a session name."
     ;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
     "ot"  '(term :which-key "Open term")
-    "oe"  '(my/frame-isolated-eshell :which-key "Open eshell")
-    "oE"  '(my/project-eshell :which-key "Open new eshell")
+    "oe"  '(my/frame-isolated-eshell :which-key "Open new eshell")
+    "oE"  '(projectile-run-eshell :which-key "Open eshell in project")
 
     ;; Notes
     "n"  '(org-capture :which-key "New note")
 
-    ;; Spellchecking
-    "S"   '(:ignore t :which-key "spellcheck")
-    "St"  '(flyspell-mode :which-key "Toggle spellcheck")
-    "Sb"  '(flyspell-buffer :which-key "Spellcheck buffer")
-    "Sn"  '(flyspell-goto-next-error :which-key "Next spelling error")
-    "Sc"  '(flyspell-correct-wrapper :which-key "Correct word at point")
-
-    ;; Workspaces (TAB)
-    "TAB"     '(:ignore t :which-key "workspaces")
-    "TAB TAB"  '(tab-bar-switch-to-tab :which-key "Switch workspace")
-    "TAB l"    '(tab-bar-switch-to-next-tab :which-key "Next workspace")
-    "TAB h"    '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
-    "TAB o"    '(tab-bar-new-tab :which-key "New workspace")
-    "TAB d"    '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
-    "TAB r"    '(tab-bar-rename-tab :which-key "Rename workspace")
+    ;; Workspaces (t)
+    "t"   '(:ignore t :which-key "workspaces")
+    "tt"  '(tab-bar-switch-to-tab :which-key "Switch workspace")
+    "tl"  '(tab-bar-switch-to-next-tab :which-key "Next workspace")
+    "th"  '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
+    "to"  '(my/tab-bar-select-or-create :which-key "New workspace")
+    "td"  '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
+    "tr"  '(tab-bar-rename-tab :which-key "Rename workspace")
     )
 
   (doom-local-leader-keys
@@ -493,7 +546,7 @@ With a prefix ARG, prompts for a session name."
     ;; Priority
     "P"   '(org-priority :which-key "Set priority")
 
-    ;; -- Tables (b) -----------------------------------------------
+    ;;; Tables (b) -----------------------------------------------
     "b-"   '(org-table-insert-hline :which-key "Insert hline")
     "bir"  '(org-table-insert-row :which-key "Insert row")
     "bic"  '(org-table-insert-column :which-key "Insert column")
@@ -511,61 +564,8 @@ With a prefix ARG, prompts for a session name."
     "'"   '(org-edit-src-code :which-key "Edit src block")
     "RET" '(org-open-at-point :which-key "Follow link")))
 
-;; -- Which-key (Built-in 30.2) ------------------------------
-(use-package which-key
-  :ensure nil                       ; Tells Emacs not to download it from MELPA since it's built-in
-  :init
-  (setq which-key-idle-delay 0.2)   ; Set your preferred delay here (e.g., 0.0 for instant popup)
-  :config
-  (setq which-key-side-window-location 'bottom
-        which-key-popup-type 'side-window
-        which-key-side-window-max-height 0.25
-        which-key-separator " ? "
-        which-key-prefix-prefix "")
-  (which-key-mode 1))
-
-;; -- Catppuccin Theme ---------------------------------------
-(use-package catppuccin-theme
-  :config
-  (setq catppuccin-flavor 'macchiato)
-  (load-theme 'catppuccin t))
-
-
-;; --- Two-Tier Workspace/Buffer Tabs ---
-(use-package tab-bar
-  :ensure nil
-  :init
-  (tab-bar-mode 1)
-  :custom
-  (tab-bar-new-tab-to 'rightmost)
-  :config
-  ;; --- Enhance Active Tab Visibility ---
-  (with-eval-after-load 'catppuccin-theme
-    (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
-          (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
-          (bg-inactive  "#24273a")  ; Macchiato Surface
-          (fg-inactive  "#cad3f5")) ; Macchiato Text
-      ;; Styling for the currently active tab
-      (set-face-attribute 'tab-bar-tab nil
-                          :background bg-active
-                          :foreground fg-active
-                          :weight 'bold
-                          :box `(:line-width (6 . 3) :color ,bg-active))
-      ;; Styling for all inactive tabs
-      (set-face-attribute 'tab-bar-tab-inactive nil
-                          :background bg-inactive
-                          :foreground fg-inactive
-                          :weight 'normal
-                          :box `(:line-width (6 . 3) :color ,bg-inactive))
-      ;; Styling for the empty remaining space behind the tabs
-      (set-face-attribute 'tab-bar nil
-                          :background "#181926" ; Darker crust color
-                          :foreground fg-inactive))))
-
-;; -- tldr ---------------------------------------------------
-(use-package tldr)
-
-;; -- Org Mode -----------------------------------------------
+;;; org mode
+;;;; general setup
 (setq org-directory "~/org")
 
 ;; With use-package + straight or elpaca:
@@ -609,6 +609,7 @@ With a prefix ARG, prompts for a session name."
 (with-eval-after-load 'org
   (define-key org-mode-map (kbd "DEL") #'my/org-smart-backspace))
 
+;;;; org special export without html links
 (use-package ox-gfm
   :after org
   :config
@@ -654,7 +655,7 @@ With a prefix ARG, prompts for a session name."
   (add-to-list 'org-export-filter-final-output-functions
                #'my/ox-gfm-fix-links))
 
-;; -- Org Mode Header Sizes ----------------------------------
+;;;; org mode header sizes
 (with-eval-after-load 'org
   (set-face-attribute 'org-level-1 nil :height 1.4 :weight 'bold)
   (set-face-attribute 'org-level-2 nil :height 1.3 :weight 'bold)
@@ -663,44 +664,10 @@ With a prefix ARG, prompts for a session name."
   (set-face-attribute 'org-level-5 nil :height 1.0)
   (set-face-attribute 'org-document-title nil :height 1.6 :weight 'bold))
 
-;; -- Projectile ---------------------------------------------
-(use-package projectile
-  :config
-  (projectile-mode 1)
-  (setq projectile-project-search-path '("/mnt/c/work/projects/"))
-  (setq projectile-enable-caching 'persistent)
-  (setq projectile-auto-update-cache t))
 
-;; -- Arrow replacement via post-insert hook -----------------
-(defvar my/arrow-replacements
-  '(("-->"  . #x2192)
-    ("<--"  . #x2190)
-    ("==>"  . #x21D2)
-    ("<=="  . #x21D0)
-    ("<=>"  . #x27FA)
-    ("->>"  . #x21A0)
-    ("<<-"  . #x219E)
-    ("..."  . #x2026)))
-
-(defun my/replace-arrows ()
-  "Replace arrow sequences with Unicode characters."
-  (dolist (pair my/arrow-replacements)
-    (let ((arrow (car pair))
-          (char (cdr pair)))
-      (when (looking-back (regexp-quote arrow) (- (point) (length arrow)))
-        (delete-char (- (length arrow)))
-        (insert (string char))))))
-
-(add-hook 'post-self-insert-hook #'my/replace-arrows)
-
-(setq-default prettify-symbols-alist
-  '(("!="   . #x2260)
-    ("::"   . #x2237)))
-
-;; -- Org Capture Templates ----------------------------------
+;;;; org capture templates
 (setq org-capture-templates
     '(
-
     ("m" "Meeting" entry 
     (file+olp+datetree "~/org/meetings.org")
     "* %^{Meeting title} %? :meeting:\n:ATTENDEES: %^{Attendees (comma separated)}\n\n** Notes\n- \n\n** Action Items\n*** TODO [#A] "
@@ -722,9 +689,20 @@ With a prefix ARG, prompts for a session name."
     ("n" "Quick Note" entry
      (file+datetree "~/org/notes.org")
      "* %^{Title}\n%T\n\n%?\n"
-     :empty-lines 0)))
+     :empty-lines 0))
+    )
 
-;; TODO states
+;;;; org export directory
+(setq org-export-output-file-name-function
+      (lambda (extension &optional subtreep pub-dir)
+        (expand-file-name
+         (concat (file-name-base (buffer-file-name)) extension)
+         (let ((dir (expand-file-name "~/org/export/")))
+           (unless (file-exists-p dir)
+             (make-directory dir t))
+           dir))))
+
+;;;; org TODO states
 (setq org-todo-keywords
       '((sequence "TODO(t)" "PLANNING(p)" "IN-PROGRESS(i@/!)" "VERIFYING(v!)" "BLOCKED(b@)"  "|" "DONE(d!)" "OBE(o@!)" "WONT-DO(w@/!)" )
         ))
@@ -741,7 +719,7 @@ With a prefix ARG, prompts for a session name."
         ("WONT-DO"     . (:background "LimeGreen"  :foreground "black" :weight bold))
         ))
 
-;; Fancy css
+;;;; org html export fancy css
 (setq org-html-head 
       "<style>
         body {
@@ -763,19 +741,82 @@ With a prefix ARG, prompts for a session name."
         .done { color: #5cb85c; font-weight: bold; }
        </style>")
 
-;; Tell org-agenda which files to scan
+;;;; org agenda setup
 (setq org-agenda-files '("~/org/todo.org"
                           "~/org/meetings"
                           "~/org/notes.org"))
 
-;; -- Evil Org (proper Doom-like org keybinds) ---------------
-(use-package evil-org
-  :after (evil org)
-  :hook (org-mode . evil-org-mode)
+;;; additional packages
+;;;; which-key
+(use-package which-key
+  :ensure nil                       ; Tells Emacs not to download it from MELPA since it's built-in
+  :init
+  (setq which-key-idle-delay 0.2)   ; Set your preferred delay here (e.g., 0.0 for instant popup)
   :config
-  (evil-org-set-key-theme '(navigation insert textobjects additional todo calendar return)))
+  (setq which-key-side-window-location 'bottom
+        which-key-popup-type 'side-window
+        which-key-side-window-max-height 0.25
+        which-key-separator " ? "
+        which-key-prefix-prefix "")
+  (which-key-mode 1))
 
-;; -- Spellcheck ---------------------------------------------
+;;;; catppuccin Theme
+(use-package catppuccin-theme
+  :config
+  (setq catppuccin-flavor 'macchiato)
+  (load-theme 'catppuccin t))
+
+;;;; SPC overrides in special buffers
+(with-eval-after-load 'dired
+  (general-def :states 'normal :keymaps 'dired-mode-map
+    "SPC" general-override-mode-map))
+(with-eval-after-load 'help-mode
+  (general-def :states 'normal :keymaps 'help-mode-map
+    "SPC" general-override-mode-map))
+
+;;;; Two-Tier Workspace/Buffer Tabs
+(use-package tab-bar
+  :ensure nil
+  :init
+  (tab-bar-mode 1)
+  :custom
+  (tab-bar-new-tab-to 'rightmost)
+  :config
+  ;;;- Enhance Active Tab Visibility ---
+  (with-eval-after-load 'catppuccin-theme
+    (let ((bg-active    "#c6a0f6")  ; Catppuccin Mauve
+          (fg-active    "#1e2030")  ; Dark Macchiato Base (high contrast)
+          (bg-inactive  "#24273a")  ; Macchiato Surface
+          (fg-inactive  "#cad3f5")) ; Macchiato Text
+      ;; Styling for the currently active tab
+      (set-face-attribute 'tab-bar-tab nil
+                          :background bg-active
+                          :foreground fg-active
+                          :weight 'bold
+                          :box `(:line-width (6 . 3) :color ,bg-active))
+      ;; Styling for all inactive tabs
+      (set-face-attribute 'tab-bar-tab-inactive nil
+                          :background bg-inactive
+                          :foreground fg-inactive
+                          :weight 'normal
+                          :box `(:line-width (6 . 3) :color ,bg-inactive))
+      ;; Styling for the empty remaining space behind the tabs
+      (set-face-attribute 'tab-bar nil
+                          :background "#181926" ; Darker crust color
+                          :foreground fg-inactive))))
+
+;;;; tldr
+(use-package tldr)
+
+;;;; projectile
+(use-package projectile
+  :config
+  (projectile-mode 1)
+  (setq projectile-project-search-path '("/mnt/c/work/projects/"))
+  (setq projectile-enable-caching 'persistent)
+  (setq projectile-auto-update-cache t))
+
+;;;; spellcheck
 (use-package flyspell
   :ensure nil ; Built-in package
   :hook ((text-mode . flyspell-mode)
@@ -792,10 +833,7 @@ With a prefix ARG, prompts for a session name."
   (setq ispell-local-dictionary-alist
         '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8))))
 
-;; -- Native Comp Warnings (suppress) -----------------------
-(setq native-comp-async-report-warnings-errors nil)
-
-;; -- Centered Cursor ----------------------------------------
+;;;; centered cursor
 (use-package centered-cursor-mode
   :config
   (global-centered-cursor-mode 1)
@@ -804,28 +842,28 @@ With a prefix ARG, prompts for a session name."
               (when (derived-mode-p 'term-mode 'eshell-mode)
                 (centered-cursor-mode -1)))))
 
-;; -- Vertico (vertical completion UI) ----------------------
+;;;; vertico (vertical completion UI)
 (use-package vertico
   :init
   (vertico-mode 1)
   (setq vertico-count 15))        ; show 15 candidates at once
 
-;; -- Orderless (fuzzy/flex matching) -----------------------
+;;;; orderless (fuzzy/flex matching)
 (use-package orderless
   :config
   (setq completion-styles '(orderless basic)
         completion-category-overrides
         '((file (styles basic partial-completion)))))
 
-;; -- Magit -------------------------------------------------
+;;;; magit
 (use-package magit)
 
-;; -- Marginalia (annotations on candidates) ----------------
+;;;; marginalia (annotations on candidates)
 (use-package marginalia
   :init
   (marginalia-mode 1))
 
-;; -- Avy Jumper (Helix gw Emulator) ------------------------
+;;;; avy jumper (helix gw emulator)
 (use-package avy
   :config
   (setq avy-keys '(?a ?s ?d ?f ?j ?k ?l ?e ?r ?u ?i ?o ?w ?v ?c ?m))
@@ -837,21 +875,21 @@ With a prefix ARG, prompts for a session name."
       (avy-with my/helix-gw
         (avy-process (avy--regex-candidates "\\b[a-zA-Z0-9_]"))))))
 
-;; -- TCL Support --------------------------------------------
+;;;; TCL Support
 (use-package tcl
   :ensure nil
   :mode ("\\.tcl\\'" . tcl-mode)
   :config
   (setq tcl-indent-level 4))
 
-;; -- Verilog / SystemVerilog Support -------------------------
+;;;; verilog / SystemVerilog Support
 (use-package verilog-mode
   :ensure nil
   :mode (("\\.v\\'" . verilog-mode)
          ("\\.sv\\'" . verilog-mode))
 
   :config
-  ;; -- Verilog Mode -------------------------------------------
+  ;;; Verilog Mode -------------------------------------------
   (setq verilog-linter "/usr/local/bin/verible-verilog-lint")
 
   ;; Customizations to mimic Doom's clean formatting
@@ -884,12 +922,17 @@ With a prefix ARG, prompts for a session name."
 
 (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup)
 
-;; -- Powerline ----------------------------------------------
+;;;; powerline
 (use-package powerline
   :config
-  (powerline-default-theme))
+  (powerline-center-evil-theme))
 
-;; -- Eglot + Verible (SystemVerilog LSP) -------------------
+(setq projectile-mode-line-prefix " Proj")
+(setq projectile-mode-line-function
+      (lambda ()
+        (format " Proj[%s]" (projectile-project-name))))
+
+;;;; eglot + verible (SystemVerilog LSP)
 (use-package eglot
   :hook (verilog-mode . eglot-ensure)
   :config
@@ -908,6 +951,7 @@ With a prefix ARG, prompts for a session name."
                               f))))))
   (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
 
+;;;; magit overrides
 (with-eval-after-load 'magit (dolist (map (list magit-mode-map
                      magit-status-mode-map
                      magit-log-mode-map
@@ -915,52 +959,32 @@ With a prefix ARG, prompts for a session name."
                      magit-refs-mode-map
                      magit-revision-mode-map))
     (define-key map (kbd "SPC") nil))
-  
-  ;; Also unbind from evil-collection's magit bindings
+  (general-def :states 'normal :keymaps 'magit-mode-map
+    "<escape>" #'magit-mode-bury-buffer)
   (evil-define-key '(normal visual motion) magit-mode-map
     (kbd "SPC") nil))
+(with-eval-after-load 'transient
+  (general-def :keymaps 'transient-base-map
+    "<escape>" #'transient-quit-one))
+(with-eval-after-load 'git-commit
+  (general-def :states 'normal :keymaps 'git-commit-mode-map
+    "<escape>" #'with-editor-cancel))
 
 ;; These give the most speed with least feature loss
-(setq vc-handled-backends nil)          ; safe, magit replaces this anyway
-(setq magit-diff-refine-hunk nil)       ; minor visual loss
+(setq vc-handled-backends '(Git))
 (setq magit-auto-revert-mode nil)       ; press SPC b r manually after operations
 
 ;; Go back to system git
 (setq magit-git-executable "git")
 
-;; -- Popup Bottom Windows (Doom-style) ---------------------
-(add-to-list 'display-buffer-alist
-  '("\\*scratch\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 0)
-    (window-height . 0.2)))
-
-(add-to-list 'display-buffer-alist
-  '("\\*Async Shell Command\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 1)
-    (window-height . 0.2)))
-
-(add-to-list 'display-buffer-alist
-  '("\\*eshell\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 2)
-    (window-height . 0.2)))
-
-(add-to-list 'display-buffer-alist
-  '("\\*terminal\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 3)
-    (window-height . 0.2)))
-
-;; -- Rainbow Delimiters -------------------------------------
+;;;; rainbow delimiters
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
 
+;;;; ripgrep
+(use-package rg)
+
+;;;; custom
 ;; Force the base label face to not interfere
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
@@ -975,11 +999,8 @@ With a prefix ARG, prompts for a session name."
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(activities avy beframe catppuccin-theme centered-cursor-mode dash
-		evil-collection evil-nerd-commenter evil-org
-		evil-surround flyspell-correct general magit
-		marginalia orderless org-modern org-superstar ox-gfm
-		powerline projectile rainbow-delimiters s tabspaces
-		tldr verilog-mode vertico)))
-
-
+   '(avy catppuccin-theme centered-cursor-mode evil-collection evil-mc
+	 evil-nerd-commenter evil-org evil-surround evil-vimish-fold
+	 general magit marginalia minimap orderless org-modern ox-gfm
+	 perspective powerline projectile rainbow-delimiters rg
+	 tabspaces tldr vertico vimish-fold)))
