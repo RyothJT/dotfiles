@@ -26,7 +26,7 @@
 (setq display-line-numbers-type 'relative)
 (global-display-line-numbers-mode 1)
 (add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
-(setopt display-fill-column-indicator-column 80)
+(setq display-fill-column-indicator-column 80)
 
 ;;;; Window size at launch
 (setq initial-frame-alist '((width . 180) (height . 41)))
@@ -196,8 +196,7 @@
 
 ;;; session/workspace persistence
 (use-package tabspaces
-  :init
-  (require 'tabspaces)
+  :ensure t
   :config
   (tabspaces-mode 1)
   (setq tabspaces-use-filtered-buffers-as-default t
@@ -284,15 +283,6 @@
     (cond
      (arg (call-interactively #'eshell))
      (t (eshell buf-name)))))
-
-;; Update your helper function for project eshell spawning as well
-(defun my/project-eshell ()
-  "Open a frame-isolated Eshell in the current project root."
-  (interactive)
-  (let ((default-directory (if (fboundp 'projectile-project-root)
-                               (or (ignore-errors (projectile-project-root)) default-directory)
-                             default-directory)))
-    (my/frame-isolated-eshell)))
 
 ;;; general.el (Leader Key)
 (use-package general
@@ -745,7 +735,7 @@
 ;;; additional packages
 ;;;; which-key
 (use-package which-key
-  :ensure nil                       ; Tells Emacs not to download it from MELPA since it's built-in
+  :ensure t                       ; Tells Emacs not to download it from MELPA since it's built-in
   :init
   (setq which-key-idle-delay 0.2)   ; Set your preferred delay here (e.g., 0.0 for instant popup)
   :config
@@ -823,7 +813,6 @@
   ;; Optimizations
   (setq flyspell-issue-message-flag nil
         flyspell-issue-welcome-flag nil)
-  (setq ispell-dictionary "en_US")
   (setq ispell-local-dictionary-alist
         '(("en_US" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_US") nil utf-8))))
 
