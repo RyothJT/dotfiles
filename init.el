@@ -878,6 +878,19 @@
   (general-def :keymaps 'transient-base-map
     "<escape>" #'transient-quit-one))
 
+;;;; diff-hl - Git diff indicators in fringe/gutter
+(use-package diff-hl
+  :after magit
+  :init
+  (global-diff-hl-mode 1)
+  :config
+  ;; Update indicators live as you edit (without waiting for buffer save)
+  (diff-hl-flydiff-mode 1)
+  
+  ;; Integration with Magit: refresh fringe automatically after committing/staging
+  (add-hook 'magit-pre-refresh-hook  #'diff-hl-magit-pre-refresh)
+  (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh))
+
 ;;;; marginalia (annotations on candidates)
 (use-package marginalia
   :init
