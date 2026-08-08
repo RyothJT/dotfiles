@@ -1019,6 +1019,15 @@
 ;;;; ripgrep
 (use-package rg)
 
+;;;; wgrep
+(use-package wgrep)
+
+;;;; keyfreq
+(use-package keyfreq
+  :config
+  (keyfreq-mode 1)
+  (keyfreq-autosave-mode 1))
+
 ;;;; custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
@@ -1032,8 +1041,9 @@
    '(avy catppuccin-theme centered-cursor-mode diff-hl evil-collection
 	 evil-goggles evil-mc evil-nerd-commenter evil-org
 	 evil-surround evil-vimish-fold general git-commit git-link
-	 magit marginalia orderless org-modern ox-gfm powerline
-	 projectile rainbow-delimiters rg tabspaces tldr vertico)))
+	 keyfreq magit marginalia orderless org-modern ox-gfm
+	 powerline projectile rainbow-delimiters rg tabspaces tldr
+	 vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
