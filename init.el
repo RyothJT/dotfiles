@@ -879,6 +879,7 @@
   (setq vc-handled-backends '(Git))
   :config
   (magit-auto-revert-mode 1)
+  (add-hook 'magit-mode-hook #'display-line-numbers-mode)
 
   (defun my/magit-hide-cursor ()
     (setq-local evil-normal-state-cursor '(nil)
@@ -915,7 +916,6 @@
   :config
   ;; Update indicators live as you edit (without waiting for buffer save)
   (diff-hl-flydiff-mode 1)
-  
   ;; Integration with Magit: refresh fringe automatically after committing/staging
   (add-hook 'magit-pre-refresh-hook  #'diff-hl-magit-pre-refresh)
   (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh))
