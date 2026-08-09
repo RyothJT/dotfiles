@@ -988,8 +988,16 @@
   (setq projectile-mode-line-function
       (lambda ()
         (format " [%s]" (projectile-project-name))))
+
+  (setq powerline-height 48)
   (set-face-attribute 'mode-line nil :height 1.2)
-  (set-face-attribute 'mode-line-inactive nil :height 1.2))
+  (set-face-attribute 'mode-line-inactive nil :height 1.2)
+
+  (let ((pink-color (catppuccin-get-color 'mauve))
+        (dark-fg    (catppuccin-get-color 'crust))) ; Dark text for high contrast on pink
+    (set-face-attribute 'powerline-active0 nil 
+                        :background pink-color 
+                        :foreground dark-fg)))
 
 ;;;; eglot + verible (SystemVerilog LSP)
 (use-package eglot
