@@ -18,6 +18,10 @@
 (setq user-full-name "Justin Troth"
       user-mail-address "justin.troth@gd-ms.com")
 
+;;;; tab settings
+(setq-default indent-tabs-mode nil)
+(setq-default tab-width 2)
+
 ;;; ui
 ;;;; menus and layout
 (menu-bar-mode -1)
@@ -161,7 +165,6 @@
   :init
   ;; Disable lockfiles completely (the .#filename symlinks that clutter git repos)
   (setq create-lockfiles nil)
-  ;; Configure backup retention rules (no-littering sets the folder, you keep the rules)
   (setq make-backup-files t
         version-control t
         delete-old-versions t
@@ -188,6 +191,8 @@
   ;; Force Evil 'iw' and 'aw' to treat symbols (including hyphens) as words
   (define-key evil-inner-text-objects-map "w" 'evil-inner-symbol)
   (define-key evil-outer-text-objects-map "w" 'evil-a-symbol)
+  (define-key evil-normal-state-map (kbd "g q") 'fill-paragraph)
+  (define-key evil-visual-state-map (kbd "g q") 'fill-region)
   (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
   (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
   (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
