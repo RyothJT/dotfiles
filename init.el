@@ -413,19 +413,17 @@
     "wc"  '(delete-window :which-key "Delete current window")
 
     ;; Spellchecking
-    "s"   '(:ignore t :which-key "spellcheck")
+    "s"   '(:ignore t :which-key "spellcheck / search")
     "st"  '(flyspell-mode :which-key "Toggle spellcheck")
-    "sb"  '(flyspell-buffer :which-key "Spellcheck buffer")
     "sn"  '(flyspell-goto-next-error :which-key "Next spelling error")
-    "sc"  '(flyspell-correct-wrapper :which-key "Correct word at point")
+    "sc"  '(flyspell-correct-word-before-point :which-key "Correct word at point")
 
     ;; Search
-    "S"   '(:ignore t :which-key "search")
-    "Ss"  '(consult-line :which-key "Search line in buffer")
-    "Sg"  '(grep :which-key "Grep")
-    "Si"  '(consult-imenu :which-key "Jump to symbol")
-    "Sr"  '(query-replace :which-key "Find & replace buffer")
-    "SR"  '(project-query-replace-regexp :which-key "Find & replace project")
+    "ss"  '(consult-line :which-key "Search line in buffer")
+    "sg"  '(grep :which-key "Grep")
+    "si"  '(consult-imenu :which-key "Jump to symbol")
+    "sr"  '(query-replace :which-key "Find & replace buffer")
+    "sR"  '(project-query-replace-regexp :which-key "Find & replace project")
 
     ;; Help
     "h"   '(:ignore t :which-key "help")
