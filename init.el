@@ -135,12 +135,13 @@
   (setq tabspaces-use-filtered-buffers-as-default t
         tabspaces-default-tab "Main"
         tabspaces-initialize-project-with-todo nil)
-  ;; Automatically save and restore desktop session (tabs, windows, buffers)
-  (setq desktop-path (list user-emacs-directory)
-        desktop-dirname user-emacs-directory
-        desktop-base-filename "emacs.desktop"
-        desktop-files-not-to-save "^$"
-        desktop-load-locked-desktop t)
+  ;; Point desktop-mode explicitly to no-littering's var directory
+  (let ((desktop-dir (no-littering-expand-var-file-name "desktop/")))
+    (setq desktop-dirname desktop-dir
+          desktop-path (list desktop-dir)
+          desktop-base-filename "emacs.desktop"
+          desktop-files-not-to-save "^$"
+          desktop-load-locked-desktop t))
   (desktop-save-mode 1))
 
 (defun my/tab-bar-select-or-create ()
@@ -154,25 +155,21 @@
         (tab-bar-new-tab)
         (tab-bar-rename-tab choice)))))
 
-;;;; backups, auto-saves, and lockfiles
-(let ((backup-dir    (expand-file-name "backups/" user-emacs-directory))
-      (auto-save-dir (expand-file-name "auto-save/" user-emacs-directory))
-      (lock-dir      (expand-file-name "lockfiles/" user-emacs-directory)))
-  ;; Create directories if they don't exist
-  (dolist (dir (list backup-dir auto-save-dir lock-dir))
-    (unless (file-exists-p dir)
-      (make-directory dir t)))
-  ;; Configure backup files
-  (setq backup-directory-alist `(("." . ,backup-dir)))
-  (setq make-backup-files t)
-  (setq version-control t)
-  (setq delete-old-versions t)
-  (setq kept-new-versions 6)
-  (setq kept-old-versions 2)
-  ;; Configure auto-save files
-  (setq auto-save-file-name-transforms `((".*" ,auto-save-dir t)))
-  ;; Configure lockfiles (Emacs 28+)
-  (setq lock-file-name-transforms `((".*" ,lock-dir t))))
+;;;; no-littering
+(use-package no-littering
+  :ensure t
+  :init
+  ;; Disable lockfiles completely (the .#filename symlinks that clutter git repos)
+  (setq create-lockfiles nil)
+  ;; Configure backup retention rules (no-littering sets the folder, you keep the rules)
+  (setq make-backup-files t
+        version-control t
+        delete-old-versions t
+        kept-new-versions 6
+        kept-old-versions 2)
+  :config
+  (require 'recentf)
+  (add-to-list 'recentf-exclude no-littering-var-directory))
 
 ;;; evil mode
 ;;;; evil package
@@ -342,8 +339,8 @@
     ;; Quit / Session
     "q"   '(:ignore t :which-key "quit/session")
     "qq"  '(save-buffers-kill-terminal :which-key "Quit Emacs")
-    "qs"  '(desktop-save :which-key "Save session")
-    "ql"  '(desktop-read :which-key "Load session")
+    "qs"  '((lambda () (interactive) (desktop-save desktop-dirname)) :which-key "Save session")
+    "ql"  '((lambda () (interactive) (desktop-read desktop-dirname)) :which-key "Load session")
     "qr"  '(restart-emacs :which-key "Restart Emacs")
 
     ;; Files
@@ -821,11 +818,22 @@
 
 ;;;; projectile
 (use-package projectile
+  :init
+  ;; Ensure no-littering's target directory exists before projectile tries to write to it
+  (make-directory (no-littering-expand-var-file-name "projectile/") t)
   :config
   (projectile-mode 1)
+  ;; Path settings
   (setq projectile-project-search-path '("~/work/projects/"))
-  (setq projectile-enable-caching 'persistent)
-  (setq projectile-auto-update-cache t))
+  (setq projectile-cache-file (no-littering-expand-var-file-name "projectile/cache.eld")
+        projectile-known-projects-file (no-littering-expand-var-file-name "projectile/bookmarks.eld"))
+  ;; Force dynamic project context switching
+  (setq projectile-track-known-projects-automatically t)
+  (setq projectile-enable-caching t)
+  (setq projectile-auto-update-cache t)
+  ;; Ignore ~/.emacs.d as a project root
+  (add-to-list 'projectile-ignored-projects (expand-file-name user-emacs-directory))
+  (add-to-list 'projectile-globally-ignored-directories user-emacs-directory))
 
 ;;;; spellcheck
 (use-package flyspell
@@ -1041,7 +1049,7 @@
    '(avy catppuccin-theme centered-cursor-mode diff-hl evil-collection
 	 evil-goggles evil-mc evil-nerd-commenter evil-org
 	 evil-surround evil-vimish-fold general git-commit git-link
-	 keyfreq magit marginalia orderless org-modern ox-gfm
+	 magit marginalia no-littering orderless org-modern ox-gfm
 	 powerline projectile rainbow-delimiters rg tabspaces tldr
 	 vertico)))
 (custom-set-faces
