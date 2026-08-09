@@ -97,7 +97,7 @@
   "Highlighted background for outline section headers.")
 (use-package outline
   :ensure nil ; Built-in package
-  :functions (outline-cycle outline-cycle-buffer)
+  :functions (outline-cycle outline-cycle-buffer evil-define-key)
   :hook (emacs-lisp-mode . (lambda ()
                              (setq-local outline-regexp ";;;+")
                              (outline-minor-mode 1)
