@@ -441,13 +441,7 @@
     "cC"  '(recompile :which-key "Recompile")
     "ck"  '(kill-compilation :which-key "Kill compilation")
     "cw"  '(delete-trailing-whitespace :which-key "Delete whitespace")
-
-    ;; Navigation
-    "cd"  '(xref-find-definitions :which-key "Go to definition")
-    "cD"  '(xref-find-definitions-other-window :which-key "Definition other window")
     "cr"  '(xref-find-references :which-key "Find references")
-    "cb"  '(xref-go-back :which-key "Jump back")
-    "cF"  '(xref-go-forward :which-key "Jump forward")
 
     ;; Errors (flymake)
     "ce"  '(:ignore t :which-key "errors")
