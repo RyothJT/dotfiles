@@ -476,21 +476,7 @@
     "gl"  '(git-link :which-key "Copy web link to line")
 
     ;; Git (magit)
-    "gi"   '(:ignore t :which-key "git")
-    "gig"  '(magit-status :which-key "Status")
-    "giB"  '(magit-blame :which-key "Blame")
-    "gil"  '(magit-log-current :which-key "Log")
-    "giL"  '(magit-log-all :which-key "Log all branches")
-    "gid"  '(magit-diff-working-tree :which-key "Diff working tree")
-    "giD"  '(magit-diff :which-key "Diff")
-    "gic"  '(magit-commit :which-key "Commit")
-    "giC"  '(magit-checkout :which-key "Checkout")
-    "gip"  '(magit-push-current :which-key "Push")
-    "giP"  '(magit-pull :which-key "Pull")
-    "gif"  '(magit-fetch :which-key "Fetch")
-    "gir"  '(magit-rebase :which-key "Rebase")
-    "git"  '(magit-tag :which-key "Tag")
-    "gib"  '(magit-branch :which-key "Branch")
+    "gi"   '(magit-status :which-key "magit status")
 
     ;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
