@@ -1,3 +1,4 @@
+;; init.el --- Emacs configuration -*- lexical-binding: t; -*-
 ;;; core
 ;;;; garbage collection
 (setq gc-cons-threshold (* 100 1024 1024)) ; 100 MB
@@ -10,6 +11,7 @@
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
+(defvar use-package-always-ensure) ; Silence byte-compiler warning
 (setq use-package-always-ensure t)
 (unless package-archive-contents
   (package-refresh-contents))
@@ -27,10 +29,12 @@
 (menu-bar-mode -1)
 (tool-bar-mode -1)
 (scroll-bar-mode -1)
+(require 'display-line-numbers)
 (setq display-line-numbers-type 'relative)
 (global-display-line-numbers-mode 1)
 (add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
 (setq display-fill-column-indicator-column 80)
+(setq sentence-end-double-space nil)
 
 ;;;; Window size at launch
 (setq initial-frame-alist '((width . 180) (height . 41)))
@@ -41,6 +45,7 @@
 (setq-default truncate-lines nil)
 
 ;;;; Auto revert buffers, ask when modified
+(require 'autorevert)
 (global-auto-revert-mode 1)
 (setq global-auto-revert-non-file-buffers t)
 (setq auto-revert-use-notify t)
@@ -48,10 +53,13 @@
 (undelete-frame-mode 1)
 
 ;;;; tabs
-(global-tab-line-mode 1)
-(setq tab-line-tab-name-function #'tab-line-tab-name-buffer)
-;; Built-in buffer exclusion matching regex pattern for '*' buffers
-(setq tab-line-exclude-buffers '("\\`\\*.*\\*'"))
+(use-package tab-line
+  :ensure nil
+  :init
+  (global-tab-line-mode 1)
+  :custom
+  (tab-line-tab-name-function #'tab-line-tab-name-buffer)
+  (tab-line-exclude-buffers '("\\`\\*.*\\*'")))
 
 ;;;; font
 (set-face-attribute 'default nil
@@ -83,19 +91,23 @@
 (add-hook 'post-self-insert-hook #'my/replace-arrows)
 
 ;;;; outline
+;;;; outline mode
 (defface my/outline-header-face
   '((t :background "#363a6f" :weight bold))
   "Highlighted background for outline section headers.")
-(add-hook 'emacs-lisp-mode-hook
-          (lambda ()
-            (setq-local outline-regexp ";;;+")
-            (outline-minor-mode 1)
-            (font-lock-add-keywords nil
-              '(("^;;;+.*$" 0 'my/outline-header-face prepend)))))
-(with-eval-after-load 'outline
-  (evil-define-key 'normal outline-minor-mode-map
-    (kbd "TAB") #'outline-cycle
-    (kbd "<backtab>") #'outline-cycle-buffer))
+(use-package outline
+  :ensure nil ; Built-in package
+  :functions (outline-cycle outline-cycle-buffer)
+  :hook (emacs-lisp-mode . (lambda ()
+                             (setq-local outline-regexp ";;;+")
+                             (outline-minor-mode 1)
+                             (font-lock-add-keywords nil
+                               '("^;;;+.*$" 0 'my/outline-header-face prepend))))
+  :config
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal outline-minor-mode-map
+      (kbd "TAB") #'outline-cycle
+      (kbd "<backtab>") #'outline-cycle-buffer)))
 
 ;;;; popup bottom windows (Doom-style)
 (add-to-list 'display-buffer-alist
@@ -128,28 +140,35 @@
 
 ;;;; catppuccin Theme
 (use-package catppuccin-theme
+  :custom
+  (catppuccin-flavor 'macchiato)
   :config
-  (setq catppuccin-flavor 'macchiato)
   (load-theme 'catppuccin t))
 
 ;;; session/workspace persistence
+;;; session/workspace persistence
 (use-package tabspaces
+  :functions tabspaces-mode
+  :custom
+  (tabspaces-use-filtered-buffers-as-default t)
+  (tabspaces-default-tab "Main")
+  (tabspaces-initialize-project-with-todo nil)
   :config
-  (tabspaces-mode 1)
-  (setq tabspaces-use-filtered-buffers-as-default t
-        tabspaces-default-tab "Main"
-        tabspaces-initialize-project-with-todo nil)
-  ;; Point desktop-mode explicitly to no-littering's var directory
-  (let ((desktop-dir (no-littering-expand-var-file-name "desktop/")))
-    (setq desktop-dirname desktop-dir
-          desktop-path (list desktop-dir)
-          desktop-base-filename "emacs.desktop"
-          desktop-files-not-to-save "^$"
-          desktop-load-locked-desktop t))
+  (tabspaces-mode 1))
+
+(use-package desktop
+  :ensure nil ; Built-in package
+  :custom
+  (desktop-dirname (no-littering-expand-var-file-name "desktop/"))
+  (desktop-path (list (no-littering-expand-var-file-name "desktop/")))
+  (desktop-base-filename "emacs.desktop")
+  (desktop-files-not-to-save "^$")
+  (desktop-load-locked-desktop t)
+  :config
   (desktop-save-mode 1))
 
 (defun my/tab-bar-select-or-create ()
-  "Prompt with Vertico for existing tabs. Switch if chosen, or create a new tab if novel."
+  "Prompt Vertico for tabs. Switch if chosen, or create a new tab if novel."
   (interactive)
   (let* ((existing-tabs (mapcar (lambda (tab) (alist-get 'name tab)) (tab-bar-tabs)))
          (choice (completing-read "Switch or Create Tab: " existing-tabs)))
@@ -169,40 +188,43 @@
         version-control t
         delete-old-versions t
         kept-new-versions 6
-        kept-old-versions 2)
-  :config
-  (require 'recentf)
-  (add-to-list 'recentf-exclude no-littering-var-directory))
+        kept-old-versions 2))
 
 ;;; evil mode
 ;;;; evil package
 (use-package evil
-  :init
-  (setq evil-want-integration t)
-  (setq evil-want-keybinding nil)
-  (setq evil-search-module 'evil-search)
-  (setq evil-symbol-word-search t)
-
+  :defines (evil-normal-state-map
+            evil-visual-state-map
+            evil-inner-text-objects-map
+            evil-outer-text-objects-map)
+  :functions (evil-mode
+              evil-inner-symbol
+              evil-a-symbol
+              evil-next-visual-line
+              evil-previous-visual-line)
+  :custom
+  (evil-want-integration t)
+  (evil-want-keybinding nil)
+  (evil-search-module 'evil-search)
+  (evil-symbol-word-search t)
   :config
   (evil-mode 1)
-  (define-key evil-normal-state-map "U" 'undo-redo)
-  (global-set-key (kbd "C-=") #'global-text-scale-adjust)
-  (global-set-key (kbd "C--") #'global-text-scale-adjust)
-  ;; Force Evil 'iw' and 'aw' to treat symbols (including hyphens) as words
-  (define-key evil-inner-text-objects-map "w" 'evil-inner-symbol)
-  (define-key evil-outer-text-objects-map "w" 'evil-a-symbol)
-  (define-key evil-normal-state-map (kbd "g q") 'fill-paragraph)
-  (define-key evil-visual-state-map (kbd "g q") 'fill-region)
-  (define-key evil-normal-state-map (kbd "j") 'evil-next-visual-line)
-  (define-key evil-normal-state-map (kbd "k") 'evil-previous-visual-line)
-  (define-key evil-visual-state-map (kbd "j") 'evil-next-visual-line)
-  (define-key evil-visual-state-map (kbd "k") 'evil-previous-visual-line)
-  (evil-make-intercept-map evil-normal-state-map)
-  (evil-make-intercept-map evil-motion-state-map))
+  (define-key evil-inner-text-objects-map "w" #'evil-inner-symbol)
+  (define-key evil-outer-text-objects-map "w" #'evil-a-symbol)
+  (evil-define-key 'normal 'global
+    "U"     #'undo-redo
+    "gq"    #'fill-paragraph
+    "j"     #'evil-next-visual-line
+    "k"     #'evil-previous-visual-line)
+  (evil-define-key 'visual 'global
+    "gq"    #'fill-region
+    "j"     #'evil-next-visual-line
+    "k"     #'evil-previous-visual-line))
 
 ;;;; evil collection
 (use-package evil-collection
   :after evil
+  :functions evil-collection-init
   :config
   (evil-collection-init))
 
@@ -216,23 +238,33 @@
 ;;;; evil surround (ys, cs, ds)
 (use-package evil-surround
   :after evil
+  :functions global-evil-surround-mode
   :config
   (global-evil-surround-mode 1))
 
 ;;;; evil-mc
 (use-package evil-mc
   :after evil
+  :functions (global-evil-mc-mode
+              evil-mc-make-cursor-move-next-line
+              evil-mc-make-cursor-move-prev-line
+              evil-mc-undo-all-cursors)
   :config
   (global-evil-mc-mode 1)
   (evil-define-key '(normal visual) 'global
     (kbd "C-S-j") #'evil-mc-make-cursor-move-next-line
     (kbd "C-S-k") #'evil-mc-make-cursor-move-prev-line
     "," #'evil-mc-undo-all-cursors))
-(setq native-comp-async-report-warnings-errors nil)
+
+(use-package comp
+  :ensure nil ; Built-in
+  :custom
+  (native-comp-async-report-warnings-errors nil))
 
 ;;;; evil org (proper Doom-like org keybinds)
 (use-package evil-org
   :after (evil org)
+  :functions evil-org-set-key-theme
   :hook (org-mode . evil-org-mode)
   :config
   (evil-org-set-key-theme '(navigation insert textobjects additional todo calendar return)))
@@ -240,17 +272,17 @@
 ;;;; evil-goggles
 (use-package evil-goggles
   :after evil
+  :functions evil-goggles-mode
+  :custom
+  (evil-goggles-duration 0.050)
+  (evil-goggles-enable-delete t)
+  (evil-goggles-enable-change t)
+  (evil-goggles-enable-indent t)
+  (evil-goggles-enable-yank t)
+  (evil-goggles-enable-join t)
+  (evil-goggles-enable-nerd-commenter t)
   :config
-  (evil-goggles-mode 1)
-  ;; Duration of the visual highlight (in seconds)
-  (setq evil-goggles-duration 0.050)
-  ;; Enable/disable support for specific actions
-  (setq evil-goggles-enable-delete t)
-  (setq evil-goggles-enable-change t)
-  (setq evil-goggles-enable-indent t)
-  (setq evil-goggles-enable-yank t)
-  (setq evil-goggles-enable-join t)
-  (setq evil-goggles-enable-nerd-commenter t))
+  (evil-goggles-mode 1))
 
 ;;; global tab line keybindings
 (defvar my/tab-line-override-map (make-sparse-keymap))
