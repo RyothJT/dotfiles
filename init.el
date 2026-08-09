@@ -334,7 +334,6 @@
     ;; Top Level
     "SPC" '(find-file :which-key "Find file")
     ":"   '(execute-extended-command :which-key "M-x")
-    "/"   '(grep :which-key "Search project")
 
     ;; Quit / Session
     "q"   '(:ignore t :which-key "quit/session")
@@ -347,7 +346,6 @@
     "f"   '(:ignore t :which-key "files")
     "ff"  '(find-file :which-key "Find file")
     "fF"  '(project-find-file :which-key "Find file")
-    "f/"  '(consult-ripgrep :which-key "Find text in project")
     "fh" '((lambda () (interactive) (find-file "~/")) :which-key "Find file from home")
     "fs"  '(save-buffer :which-key "Save file")
     "fS"  '(write-file :which-key "Save file as")
@@ -420,7 +418,8 @@
 
     ;; Search
     "ss"  '(consult-line :which-key "Search line in buffer")
-    "sg"  '(grep :which-key "Grep")
+    "s/"  '(consult-ripgrep :which-key "Find in project")
+    "so"  '(occur :which-key "Find in buffer")
     "si"  '(consult-imenu :which-key "Jump to symbol")
     "sr"  '(query-replace :which-key "Find & replace buffer")
     "sR"  '(project-query-replace-regexp :which-key "Find & replace project")
