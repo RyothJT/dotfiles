@@ -203,6 +203,7 @@
               evil-next-visual-line
               evil-previous-visual-line)
   :custom
+  (evil-shift-width 2)
   (evil-want-integration t)
   (evil-want-keybinding nil)
   (evil-search-module 'evil-search)
