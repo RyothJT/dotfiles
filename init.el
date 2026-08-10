@@ -1038,26 +1038,36 @@ With a prefix ARG, prompts for a session name."
 
   (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup))
 
-
 ;;;; powerline
 (use-package powerline
   :defines (projectile-mode-line-prefix
             projectile-mode-line-function
             powerline-height)
   :functions (powerline-center-evil-theme
+              powerline-reset
               projectile-project-name
               catppuccin-get-color)
+  :preface
+  (defun my/update-powerline-height ()
+    "Set powerline height based on actual rendered font pixel height."
+    (let* ((info (font-info (face-font 'default)))
+           (pixel-height (+ (aref info 2) (aref info 3)))  ; ascent + descent
+           (padding 0))
+      (setq powerline-height (+ pixel-height padding))
+      (powerline-reset)))
   :custom
-  (powerline-height 48)
   (projectile-mode-line-prefix " ")
   :config
+  (my/update-powerline-height)
+  (add-hook 'after-make-frame-functions
+            (lambda (_) (my/update-powerline-height)))
   (powerline-center-evil-theme)
   (setq projectile-mode-line-function
         (lambda ()
           (format " [%s]" (projectile-project-name))))
   (set-face-attribute 'mode-line nil :height 1.2)
   (set-face-attribute 'mode-line-inactive nil :height 1.2)
-  (let ((bar-color (catppuccin-get-color 'pink)) ; Changed from mauve to lavender
+  (let ((bar-color (catppuccin-get-color 'pink))
         (dark-fg    (catppuccin-get-color 'crust)))
     (set-face-attribute 'powerline-active0 nil
                         :background bar-color
