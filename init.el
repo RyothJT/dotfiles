@@ -69,26 +69,10 @@
   (tab-line-tab-name-function #'tab-line-tab-name-buffer)
   (tab-line-exclude-buffers '("\\`\\*.*\\*'"))
   :config
-  (defvar my/tab-line-override-map (make-sparse-keymap))
-  (define-key my/tab-line-override-map (kbd "H") #'tab-line-switch-to-prev-tab)
-  (define-key my/tab-line-override-map (kbd "L") #'tab-line-switch-to-next-tab)
-
-  (declare-function my/tab-line-override-mode "init")
-  (define-minor-mode my/tab-line-override-mode
-    "Global minor mode to force H and L tab-line navigation."
-    :global t
-    :group 'tab-line
-    :keymap my/tab-line-override-map)
-
-  (my/tab-line-override-mode 1)
-  (add-to-list 'emulation-mode-map-alists
-              '((my/tab-line-override-mode . my/tab-line-override-map)))
-
-  ;; Disable in insert mode, enable in all other evil states
-  (dolist (hook '(evil-insert-state-entry-hook minibuffer-setup-hook))
-    (add-hook hook (lambda () (my/tab-line-override-mode -1))))
-  (dolist (hook '(evil-insert-state-exit-hook minibuffer-exit-hook))
-    (add-hook hook (lambda () (my/tab-line-override-mode 1)))))
+  (with-eval-after-load 'general
+    (general-def :keymaps 'override :states '(normal motion visual)
+      "H" #'tab-line-switch-to-prev-tab
+      "L" #'tab-line-switch-to-next-tab)))
 
 ;;;; font
 (set-face-attribute 'default nil
