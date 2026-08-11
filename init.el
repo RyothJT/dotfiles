@@ -965,13 +965,6 @@ With a prefix ARG, prompts for a session name."
     (general-def :states 'normal :keymaps 'git-commit-mode-map
       "<escape>" #'with-editor-cancel)))
 
-(use-package transient
-  :functions (transient-quit-one)
-  :config
-  (general-def :keymaps 'transient-base-map
-    "<escape>" #'transient-quit-one))
-
-;;;; diff-hl - Git diff indicators in fringe/gutter
 ;;;; diff-hl - Git diff indicators in fringe/gutter
 (use-package diff-hl
   :after magit
@@ -1011,12 +1004,13 @@ With a prefix ARG, prompts for a session name."
   :ensure nil
   :mode ("\\.tcl\\'" . tcl-mode)
   :config
-  (setq tcl-indent-level 4))
+  (setq tcl-indent-level 2))
 
 ;;;; verilog / SystemVerilog Support
 (use-package verilog-mode
   :ensure nil
-  :functions (my/verilog-font-lock-setup)
+  :functions (my/verilog-font-lock-setup
+              my/verilog-indent-bars-setup)
   :mode (("\\.v\\'" . verilog-mode)
          ("\\.sv\\'" . verilog-mode))
   :custom-face
@@ -1024,10 +1018,10 @@ With a prefix ARG, prompts for a session name."
   (verilog-number-face    ((t :foreground "#f5a97f")))
   :config
   (setq verilog-linter "/usr/local/bin/verible-verilog-lint"
-        verilog-indent-level 4
-        verilog-indent-level-module 4
-        verilog-indent-level-declaration 4
-        verilog-indent-level-behavioral 4
+        verilog-indent-level 2
+        verilog-indent-level-module 2
+        verilog-indent-level-declaration 2
+        verilog-indent-level-behavioral 2
         verilog-auto-endcomments nil)
 
   (defun my/verilog-font-lock-setup ()
@@ -1036,7 +1030,14 @@ With a prefix ARG, prompts for a session name."
         ("\\b\\([0-9]+\\('[bdh][0-9a-fA-FxXzZ_]+\\)?\\)\\b" 1 'verilog-number-face))
       'append)) ; Use 'append so syntactic comment/string faces take precedence
 
-  (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup))
+  (defun my/verilog-indent-bars-setup ()
+    (setq-local indent-bars-spacing-override 2)
+    (when (bound-and-true-p indent-bars-mode)
+      (indent-bars-mode -1)
+      (indent-bars-mode 1)))
+
+  (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup)
+  (add-hook 'verilog-mode-hook #'my/verilog-indent-bars-setup))
 
 ;;;; powerline
 (use-package powerline
@@ -1081,8 +1082,12 @@ With a prefix ARG, prompts for a session name."
                `((verilog-mode) .
                  ,(lambda (_interactive)
                     (let* ((proj (project-current))
-                           (root (if proj (project-root proj) default-directory)))
-                      (list "verible-verilog-ls"
+                           (root (if proj (project-root proj) default-directory))
+                           (project-server
+                            (expand-file-name "scripts/verible-ls.sh" root)))
+                      (list (if (file-executable-p project-server)
+                                project-server
+                              "verible-verilog-ls")
                             "--file_list_path"
                             (let ((f (make-temp-file "verible-files")))
                               (with-temp-file f
@@ -1130,15 +1135,16 @@ With a prefix ARG, prompts for a session name."
    '("c4df9006b9eb32599d758800a32f3487c2cdf13826084511783b47d419024af2"
      default))
  '(package-selected-packages
-   '(avy catppuccin-theme centered-cursor-mode diff-hl evil-collection
-	 evil-goggles evil-mc evil-nerd-commenter evil-org
-	 evil-surround evil-vimish-fold general git-commit git-link
-	 magit marginalia no-littering orderless org-modern ox-gfm
-	 powerline projectile rainbow-delimiters rg tabspaces tldr
-	 vertico)))
+   '(avy catppuccin-theme centered-cursor-mode consult diff-hl
+         evil-collection evil-goggles evil-mc evil-nerd-commenter
+         evil-org evil-surround flyspell-correct general git-link
+         imenu-list indent-bars keyfreq magit marginalia markdown-mode
+         minimap mood-line no-littering orderless org-modern ox-gfm
+         perspective powerline projectile rainbow-delimiters rg
+         sublimity tabspaces tldr vertico vterm)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- )
+ '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
