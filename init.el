@@ -188,7 +188,8 @@
         (tab-bar-select-tab-by-name choice)
       (when (not (string-empty-p choice))
         (tab-bar-new-tab)
-        (tab-bar-rename-tab choice)))))
+        (tab-bar-rename-tab choice)
+        (bury-buffer)))))
 
 ;;;; no-littering
 (use-package no-littering
