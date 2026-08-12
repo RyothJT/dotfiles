@@ -201,14 +201,21 @@
 ;;;; no-littering
 (use-package no-littering
   :ensure t
-  :init
-  ;; Disable lockfiles completely (the .#filename symlinks that clutter git repos)
+  :config
+  (require 'no-littering)
+  ;; Disable lockfiles (.#filename)
   (setq create-lockfiles nil)
+
+  ;; Backup settings (filename~)
   (setq make-backup-files t
         version-control t
         delete-old-versions t
         kept-new-versions 6
-        kept-old-versions 2))
+        kept-old-versions 2)
+
+  ;; Redirect auto-save files (#filename#) to no-littering var directory
+  (setq auto-save-file-name-transforms
+        `((".*" ,(no-littering-expand-var-file-name "auto-save/") t))))
 
 ;;; evil mode
 ;;;; evil package
