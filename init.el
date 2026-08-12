@@ -36,6 +36,13 @@
 (setq display-fill-column-indicator-column 80)
 (setq sentence-end-double-space nil)
 
+;; Ensure buffer-local variables are applied properly when entering programming modes
+(add-hook 'prog-mode-hook
+          (lambda ()
+            (setq indent-tabs-mode nil)
+            (setq display-fill-column-indicator-column 80)
+            (display-fill-column-indicator-mode 1)))
+
 ;;;; Window size at launch
 (setq initial-frame-alist '((width . 180) (height . 41)))
 (setq default-frame-alist initial-frame-alist)
