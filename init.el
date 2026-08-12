@@ -1126,6 +1126,45 @@ With a prefix ARG, prompts for a session name."
   (keyfreq-mode 1)
   (keyfreq-autosave-mode 1))
 
+;;;; yafolding
+(use-package yafolding
+  :defines (yafolding-ellipsis-content
+            yafolding-mode-map)
+  :functions (my/yafolding-pad-ellipsis
+              yafolding-toggle-element)
+  :hook ((prog-mode . yafolding-mode)
+         (emacs-lisp-mode . (lambda () (yafolding-mode -1))))
+  :config
+  (defun my/yafolding-pad-ellipsis (region)
+    "Pad `yafolding-ellipsis-content' to column 80 with line count prefix."
+    (when (and region (listp region) (numberp (car region)) (numberp (cadr region)))
+      (let* ((beg (car region))
+             (end (cadr region))
+             (lines-folded (count-lines beg end))
+             (line-len (- (line-end-position) (line-beginning-position)))
+             (target-col 80)
+             (prefix (format " [+%d lines]  " lines-folded))
+             (base-suffix "│")
+             ;; Only include the suffix if the line length + prefix + suffix fits within 80 characters
+             (suffix (if (<= (+ line-len (length prefix) (length base-suffix)) target-col)
+                         base-suffix
+                       ""))
+             (pad-count (max 0 (- target-col line-len (length prefix) (length suffix)))))
+        (setq yafolding-ellipsis-content
+              (concat prefix (make-string pad-count ?─) suffix))))
+    region)
+
+  (advice-add 'yafolding-get-element-region :filter-return #'my/yafolding-pad-ellipsis)
+
+  (set-face-attribute 'yafolding-ellipsis-face nil
+                      :background (catppuccin-get-color 'base)
+                      :foreground (catppuccin-get-color 'peach)
+                      :weight 'bold)
+
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal yafolding-mode-map
+      (kbd "TAB") #'yafolding-toggle-element)))
+
 ;;;; custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
