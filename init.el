@@ -239,6 +239,8 @@
   (evil-mode 1)
   (define-key evil-inner-text-objects-map "w" #'evil-inner-symbol)
   (define-key evil-outer-text-objects-map "w" #'evil-a-symbol)
+  (global-set-key (kbd "C-=") #'global-text-scale-adjust)
+  (global-set-key (kbd "C--") #'global-text-scale-adjust)
   (evil-define-key 'normal 'global
     "U"     #'undo-redo
     "gq"    #'fill-paragraph
