@@ -352,6 +352,7 @@
   :ensure nil
   :custom
   (eshell-term-name "xterm-256color")
+  (eshell-hist-ignoredups t)
   :defines (eshell-mode-map)
   :functions (eshell-send-input
               my/eshell-swap-return-keys)
@@ -375,6 +376,17 @@ With a prefix ARG, prompts for a session name."
     (cond
      (arg (call-interactively #'eshell))
      (t (eshell buf-name)))))
+
+(defun my/project-frame-isolated-eshell (&optional arg)
+  "Open the frame-local Eshell at the current project root."
+  (interactive "P")
+  (let ((project-root (project-root (project-current t))))
+    (if arg
+        (let ((default-directory project-root))
+          (call-interactively #'eshell))
+      (my/frame-isolated-eshell)
+      (setq-local default-directory project-root)
+      (eshell-reset))))
 
 ;;; general.el (leader key)
 (use-package general
@@ -496,6 +508,7 @@ With a prefix ARG, prompts for a session name."
 
     ;; Search
     "ss"  '(consult-line :which-key "Search line in buffer")
+    "sf"  '(my/consult-recursive-file :which-key "Find file from here")
     "s/"  '(consult-ripgrep :which-key "Find in project")
     "so"  '(occur :which-key "Find in buffer")
     "si"  '(consult-imenu :which-key "Jump to symbol")
@@ -551,7 +564,7 @@ With a prefix ARG, prompts for a session name."
     "o"   '(:ignore t :which-key "open")
     "ot"  '(term :which-key "Open term")
     "oe"  '(my/frame-isolated-eshell :which-key "Open new eshell")
-    "oE"  '(projectile-run-eshell :which-key "Open eshell in project")
+    "oE"  '(my/project-frame-isolated-eshell :which-key "Open eshell in project")
 
     ;; Notes
     "n"  '(org-capture :which-key "New note")
@@ -686,8 +699,9 @@ With a prefix ARG, prompts for a session name."
 
      ("t" "Todo" entry
       (file+headline "~/org/todo.org" "Tasks")
-      "* TODO %^{Task}\nSCHEDULED: %^t DEADLINE: %^t\n-  %?"
-      :empty-lines 0)
+      "* TODO %^{Task}\nSCHEDULED: %^t DEADLINE: %^t\n-  %?\n"
+      :empty-lines-before 1
+      :empty-lines-after 0)
 
      ("j" "Work Log Entry" item
       (file+datetree "~/org/work-log.org")
@@ -937,8 +951,16 @@ With a prefix ARG, prompts for a session name."
 
 ;;;; consult (Search with live previews)
 (use-package consult
+  :functions (consult-fd consult-find)
   :custom
-  (consult-narrow-key "<"))
+  (consult-narrow-key "<")
+  :config
+  (defun my/consult-recursive-file ()
+    "Recursively find a file below `default-directory'."
+    (interactive)
+    (if (executable-find "fd")
+        (consult-fd default-directory)
+      (consult-find default-directory))))
 
 ;;;; magit
 (use-package magit
@@ -964,6 +986,11 @@ With a prefix ARG, prompts for a session name."
     (setq-local evil-normal-state-cursor '(nil)
       evil-motion-state-cursor '(nil)))
   (add-hook 'magit-mode-hook #'my/magit-hide-cursor)
+
+  ;; Magit's conflict resolver replaces Ediff's normal quit hook.  Restore its
+  ;; cleanup so temporary Ediff buffers and the control panel are removed.
+  (with-eval-after-load 'magit-ediff
+    (add-hook 'magit-ediff-quit-hook #'ediff-cleanup-mess t))
 
   ;; Explicitly refresh status buffer on save (useful for non-standard file watchers/TRAMP/WSL)
   (add-hook 'after-save-hook #'magit-after-save-refresh-status)
@@ -1060,7 +1087,8 @@ With a prefix ARG, prompts for a session name."
 (use-package powerline
   :defines (projectile-mode-line-prefix
             projectile-mode-line-function
-            powerline-height)
+            powerline-height
+            powerline-default-separator)
   :functions (powerline-center-evil-theme
               powerline-reset
               projectile-project-name
@@ -1076,6 +1104,7 @@ With a prefix ARG, prompts for a session name."
   :custom
   (projectile-mode-line-prefix " ")
   :config
+  (setq powerline-default-separator 'bar)
   (my/update-powerline-height)
   (add-hook 'after-make-frame-functions
             (lambda (_) (my/update-powerline-height)))
@@ -1083,8 +1112,8 @@ With a prefix ARG, prompts for a session name."
   (setq projectile-mode-line-function
         (lambda ()
           (format " [%s]" (projectile-project-name))))
-  (set-face-attribute 'mode-line nil :height 1.2)
-  (set-face-attribute 'mode-line-inactive nil :height 1.2)
+  (set-face-attribute 'mode-line nil :height 1.0)
+  (set-face-attribute 'mode-line-inactive nil :height 1.0)
   (let ((bar-color (catppuccin-get-color 'pink))
         (dark-fg    (catppuccin-get-color 'crust)))
     (set-face-attribute 'powerline-active0 nil
@@ -1195,9 +1224,9 @@ With a prefix ARG, prompts for a session name."
          evil-collection evil-goggles evil-mc evil-nerd-commenter
          evil-org evil-surround flyspell-correct general git-link
          imenu-list indent-bars keyfreq magit marginalia markdown-mode
-         minimap mood-line no-littering orderless org-modern ox-gfm
-         perspective powerline projectile rainbow-delimiters rg
-         sublimity tabspaces tldr vertico vterm)))
+         minimap mood-line no-littering orderless org-modern origami
+         ox-gfm perspective powerline projectile rainbow-delimiters rg
+         sublimity tabspaces tldr vertico vterm yafolding)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
