@@ -1072,7 +1072,9 @@ With a prefix ARG, prompts for a session name."
         verilog-indent-level-module 2
         verilog-indent-level-declaration 2
         verilog-indent-level-behavioral 2
-        verilog-auto-endcomments nil)
+        verilog-auto-endcomments nil
+        verilog-auto-newline nil
+        verilog-auto-indent-on-newline nil)
 
   (defun my/verilog-font-lock-setup ()
     (font-lock-add-keywords nil
@@ -1088,6 +1090,29 @@ With a prefix ARG, prompts for a session name."
 
   (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup)
   (add-hook 'verilog-mode-hook #'my/verilog-indent-bars-setup))
+
+;;;; eglot + verible (SystemVerilog LSP)
+(use-package eglot
+  :hook (verilog-mode . eglot-ensure)
+  :config
+  (add-to-list 'eglot-server-programs
+               `((verilog-mode) .
+                 ,(lambda (_interactive)
+                    (let* ((proj (project-current))
+                           (root (if proj (project-root proj) default-directory))
+                           (project-server
+                            (expand-file-name "scripts/verible-ls.sh" root)))
+                      (list (if (file-executable-p project-server)
+                                project-server
+                              "verible-verilog-ls")
+                            "--file_list_path"
+                            (let ((f (make-temp-file "verible-files")))
+                              (with-temp-file f
+                                (insert (mapconcat #'identity
+                                                   (directory-files-recursively root "\\.s?v$")
+                                                   "\n")))
+                              f))))))
+  (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
 
 ;;;; powerline
 (use-package powerline
@@ -1125,29 +1150,6 @@ With a prefix ARG, prompts for a session name."
     (set-face-attribute 'powerline-active0 nil
                         :background bar-color
                         :foreground dark-fg)))
-
-;;;; eglot + verible (SystemVerilog LSP)
-(use-package eglot
-  :hook (verilog-mode . eglot-ensure)
-  :config
-  (add-to-list 'eglot-server-programs
-               `((verilog-mode) .
-                 ,(lambda (_interactive)
-                    (let* ((proj (project-current))
-                           (root (if proj (project-root proj) default-directory))
-                           (project-server
-                            (expand-file-name "scripts/verible-ls.sh" root)))
-                      (list (if (file-executable-p project-server)
-                                project-server
-                              "verible-verilog-ls")
-                            "--file_list_path"
-                            (let ((f (make-temp-file "verible-files")))
-                              (with-temp-file f
-                                (insert (mapconcat #'identity
-                                                   (directory-files-recursively root "\\.s?v$")
-                                                   "\n")))
-                              f))))))
-  (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
 
 ;;;; rainbow delimiters
 (use-package rainbow-delimiters
