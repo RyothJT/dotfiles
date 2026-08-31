@@ -425,6 +425,32 @@ With a prefix ARG, prompts for a session name."
         (message "Copied file to clipboard: %s" path))
     (message "Buffer is not visiting a file!")))
 
+(defun my/apply-search-replace-from-clipboard ()
+  "Apply Aider-style SEARCH/REPLACE block(s) from the Wayland clipboard to the current buffer."
+  (interactive)
+  (let ((clip-text (gui-get-selection 'CLIPBOARD 'STRING))
+        (matches 0))
+    (unless (and clip-text (not (string-empty-p clip-text)))
+      (user-error "Clipboard is empty!"))
+    (save-excursion
+      (with-temp-buffer
+        (insert clip-text)
+        (goto-char (point-min))
+        (while (re-search-forward "^<<<<<<< SEARCH\n\\(\\(?:.\\|\n\\)*?\\)=======\n\\(\\(?:.\\|\n\\)*?\\)>>>>>>> REPLACE" nil t)
+          (let ((search-str (match-string 1))
+                (replace-str (match-string 2)))
+            (with-current-buffer (other-buffer (current-buffer) t)
+              (save-excursion
+                (goto-char (point-min))
+                (if (search-forward search-str nil t)
+                    (progn
+                      (replace-match replace-str t t)
+                      (cl-incf matches))
+                  (message "Could not find match for search block:\n%s" search-str))))))))
+    (if (> matches 0)
+        (message "Successfully applied %d SEARCH/REPLACE block(s)." matches)
+      (error "No SEARCH/REPLACE blocks were matched or applied."))))
+
 ;;; general.el (leader key)
 (use-package general
   :defines (doom-leader-keys
@@ -480,6 +506,7 @@ With a prefix ARG, prompts for a session name."
     "fP" '(my/open-config-file :which-key "Open config")
     "fy" '(my/yank-file-path :which-key "Yank file path")
     "fY" '(my/copy-current-file-to-clipboard :which-key "Copy file to clipboard")
+    "fA" '(my/apply-search-replace-from-clipboard :which-key "Apply patch from clipboard")
 
 ;;;;; Buffers
     "b"   '(:ignore t :which-key "buffers")
@@ -639,11 +666,11 @@ With a prefix ARG, prompts for a session name."
 ;;;;; Priority
     "P"   '(org-priority :which-key "Set priority")
 
-;;;;;; Tables (b) -----------------------------------------------
+;;;;;; Tables
     "b-"   '(org-table-insert-hline :which-key "Insert hline")
+    "bi"   '(:ignore t :which-key "table insert")
     "bir"  '(org-table-insert-row :which-key "Insert row")
     "bic"  '(org-table-insert-column :which-key "Insert column")
-    "bdr"  '(org-table-kill-row :which-key "Delete row")
     "bdc"  '(org-table-delete-column :which-key "Delete column")
     "ba"   '(org-table-align :which-key "Align table")
     "bs"   '(org-table-sort-lines :which-key "Sort rows")
@@ -651,7 +678,9 @@ With a prefix ARG, prompts for a session name."
     "be"   '(org-table-eval-formulas :which-key "Eval formulas")
 
 ;;;;; Checkbox
-    "bx"   '(org-toggle-checkbox :which-key "Toggle Checkbox")
+    "bc"   '(my/org-checkbox-checked :which-key "Check [X]")
+    "bx"   '(my/org-checkbox-cancelled :which-key "Cancel [-]")
+    "bo"   '(my/org-checkbox-open :which-key "Open [ ]")
 
 ;;;;; Misc
     "'"   '(org-edit-src-code :which-key "Edit src block")
@@ -678,6 +707,33 @@ With a prefix ARG, prompts for a session name."
       (if (string-match-p "^\\s-*\\(- \\|\\* \\|\\+ \\|[0-9]+\\.\\s-\\)\\s-*$" line)
           (kill-line 0)
         (call-interactively #'backward-delete-char-untabify))))
+
+  (defun my/org-set-checkbox (state)
+    "Set the checkbox state at point to STATE (\"[ ]\", \"[X]\", or \"[-]\", inserting one if missing."
+    (save-excursion
+      (beginning-of-line)
+      (if (re-search-forward "\\[[ X-]\\]" (line-end-position) t)
+          (replace-match state)
+        (if (re-search-forward "^\\(\\s-*\\(?:[-+*]\\|[0-9]+[.)]\\)\\)\\(\\s-+\\)" (line-end-position) t)
+            (replace-match (concat "\\1 " state "\\2"))
+          (beginning-of-line)
+          (skip-chars-forward " \t")
+          (insert "- " state " ")))))
+
+  (defun my/org-checkbox-checked ()
+    "Set checkbox to checked [X], inserting a checkbox if missing."
+    (interactive)
+    (my/org-set-checkbox "[X]"))
+
+  (defun my/org-checkbox-cancelled ()
+    "Set checkbox to cancelled [-], inserting a checkbox if missing."
+    (interactive)
+    (my/org-set-checkbox "[-]"))
+
+  (defun my/org-checkbox-open ()
+    "Set checkbox to open [ ], inserting a checkbox if missing."
+    (interactive)
+    (my/org-set-checkbox "[ ]"))
 
   :hook (find-file . my/auto-insert-org-template)
   :bind (:map org-mode-map
