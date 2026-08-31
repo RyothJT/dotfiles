@@ -207,11 +207,13 @@
   (setq create-lockfiles nil)
 
   ;; Backup settings (filename~)
+;; Backup settings (redirected to var directory)
   (setq make-backup-files t
         version-control t
         delete-old-versions t
         kept-new-versions 6
-        kept-old-versions 2)
+        kept-old-versions 2
+        backup-directory-alist `((".*" . ,(no-littering-expand-var-file-name "backup/"))))
 
   ;; Redirect auto-save files (#filename#) to no-littering var directory
   (setq auto-save-file-name-transforms
@@ -241,6 +243,8 @@
   (define-key evil-outer-text-objects-map "w" #'evil-a-symbol)
   (global-set-key (kbd "C-=") #'global-text-scale-adjust)
   (global-set-key (kbd "C--") #'global-text-scale-adjust)
+  (with-eval-after-load 'dired
+    (evil-define-key 'normal dired-mode-map (kbd "N") 'dired-create-empty-file))
   (evil-define-key 'normal 'global
     "U"     #'undo-redo
     "gq"    #'fill-paragraph
@@ -388,6 +392,39 @@ With a prefix ARG, prompts for a session name."
       (setq-local default-directory project-root)
       (eshell-reset))))
 
+;;;; custom file commands
+(defun my/open-config-file ()
+  "Find and open the user's Emacs initialization file."
+  (interactive)
+  (if-let ((config-file (seq-find #'file-exists-p
+                                 '("~/.emacs.d/init.el"
+                                   "~/.config/emacs/init.el"
+                                   "~/.emacs"))))
+      (find-file config-file)
+    (message "No Emacs configuration file found!")))
+
+(defun my/yank-file-path ()
+  "Copy the path of the current buffer's file to the kill ring."
+  (interactive)
+  (if-let ((path (buffer-file-name)))
+      (progn
+        (kill-new path)
+        (message "Copied: %s" path))
+    (message "Buffer has no file!")))
+
+(defun my/copy-current-file-to-clipboard ()
+  "Copy the current buffer's file object to the Wayland clipboard for Dolphin/KDE."
+  (interactive)
+  (if-let ((path (buffer-file-name)))
+      (let ((file-uri (concat "file://" (expand-file-name path))))
+        (with-temp-buffer
+          (insert file-uri "\n")
+          (call-process-region (point-min) (point-max)
+                              "wl-copy" nil nil nil
+                              "--type" "text/uri-list"))
+        (message "Copied file to clipboard: %s" path))
+    (message "Buffer is not visiting a file!")))
+
 ;;; general.el (leader key)
 (use-package general
   :defines (doom-leader-keys
@@ -421,18 +458,18 @@ With a prefix ARG, prompts for a session name."
 
   ;;;; keybinds
   (doom-leader-keys
-    ;; Top Level
+;;;;; Top Level
     "SPC" '(find-file :which-key "Find file")
     ":"   '(execute-extended-command :which-key "M-x")
 
-    ;; Quit / Session
+;;;;; Quit / Session
     "q"   '(:ignore t :which-key "quit/session")
     "qq"  '(save-buffers-kill-terminal :which-key "Quit Emacs")
     "qs"  '((lambda () (interactive) (desktop-save desktop-dirname)) :which-key "Save session")
     "ql"  '((lambda () (interactive) (desktop-read desktop-dirname)) :which-key "Load session")
     "qr"  '(restart-emacs :which-key "Restart Emacs")
 
-    ;; Files
+;;;;; Files
     "f"   '(:ignore t :which-key "files")
     "ff"  '(find-file :which-key "Find file")
     "fF"  '(project-find-file :which-key "Find file")
@@ -440,42 +477,11 @@ With a prefix ARG, prompts for a session name."
     "fs"  '(save-buffer :which-key "Save file")
     "fS"  '(write-file :which-key "Save file as")
     "fd"  '(dired :which-key "Open dired")
-    "fP" '((lambda ()
-	    (interactive)
-	    (find-file
-	    (seq-find #'file-exists-p
-			'("~/.emacs.d/init.el"
-			"~/.config/emacs/init.el"
-			"~/.emacs"))))
-	:which-key "Open config")
-    "fD"  '((lambda () (interactive)
-          (if (buffer-file-name)
-              (when (yes-or-no-p (format "Delete %s? " (buffer-file-name)))
-                (delete-file (buffer-file-name))
-                (kill-buffer))
-            (message "Buffer is not visiting a file!")))
-        :which-key "Delete file")
-    "fy" '((lambda () (interactive)
-          (let ((path (buffer-file-name)))
-            (if path
-                (progn (kill-new path)
-                       (message "Copied: %s" path))
-              (message "Buffer has no file!"))))
-        :which-key "Yank file path")
-    "fY" '((lambda () (interactive)
-	    (let ((path (buffer-file-name)))
-		(if path
-		    (let ((win-path (replace-regexp-in-string
-				    "/" "\\\\"
-				    (replace-regexp-in-string
-				    "^/mnt/\\([a-z]\\)/" "\\1:\\\\"
-				    path))))
-		    (kill-new win-path)
-		    (message "Copied: %s" win-path))
-		(message "Buffer has no file!"))))
-	    :which-key "Yank Windows path")
+    "fP" '(my/open-config-file :which-key "Open config")
+    "fy" '(my/yank-file-path :which-key "Yank file path")
+    "fY" '(my/copy-current-file-to-clipboard :which-key "Copy file to clipboard")
 
-    ;; Buffers
+;;;;; Buffers
     "b"   '(:ignore t :which-key "buffers")
     "bb"  '(consult-buffer :which-key "Switch workspace buffer")
     "bB"  '(switch-to-buffer :which-key "Switch global buffer")
@@ -486,7 +492,7 @@ With a prefix ARG, prompts for a session name."
     "br"  '(revert-buffer :which-key "Revert buffer")
     "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
 
-    ;; Windows
+;;;;; Windows
     "w"   '(:ignore t :which-key "windows")
     "wv"  '(split-window-right :which-key "Split vertical")
     "ws"  '(split-window-below :which-key "Split horizontal")
@@ -500,13 +506,13 @@ With a prefix ARG, prompts for a session name."
     "wf"  '(toggle-frame-fullscreen :which-key "Fullscreen")
     "wc"  '(delete-window :which-key "Delete current window")
 
-    ;; Spellchecking
+;;;;; Spellchecking
     "s"   '(:ignore t :which-key "spellcheck / search")
     "st"  '(flyspell-mode :which-key "Toggle spellcheck")
     "sn"  '(flyspell-goto-next-error :which-key "Next spelling error")
     "sc"  '(flyspell-correct-word-before-point :which-key "Correct word at point")
 
-    ;; Search
+;;;;; Search
     "ss"  '(consult-line :which-key "Search line in buffer")
     "sf"  '(my/consult-recursive-file :which-key "Find file from here")
     "s/"  '(consult-ripgrep :which-key "Find in project")
@@ -515,7 +521,7 @@ With a prefix ARG, prompts for a session name."
     "sr"  '(query-replace :which-key "Find & replace buffer")
     "sR"  '(project-query-replace-regexp :which-key "Find & replace project")
 
-    ;; Help
+;;;;; Help
     "h"   '(:ignore t :which-key "help")
     "hk"  '(describe-key :which-key "Describe key")
     "hf"  '(describe-function :which-key "Describe function")
@@ -526,7 +532,7 @@ With a prefix ARG, prompts for a session name."
     "hr"  '((lambda () (interactive) (load-file user-init-file)) :which-key "Reload config")
     "hy"  '(my/yank-last-five-messages :which-key "Yank last message")
 
-    ;; Code
+;;;;; Code
     "c"   '(:ignore t :which-key "code")
     "cc"  '(compile :which-key "Compile")
     "cC"  '(recompile :which-key "Recompile")
@@ -534,13 +540,13 @@ With a prefix ARG, prompts for a session name."
     "cw"  '(delete-trailing-whitespace :which-key "Delete whitespace")
     "cr"  '(xref-find-references :which-key "Find references")
 
-    ;; Errors (flymake)
+;;;;; Errors (flymake)
     "ce"  '(:ignore t :which-key "errors")
     "cen" '(flymake-goto-next-error :which-key "Next error")
     "cep" '(flymake-goto-prev-error :which-key "Prev error")
     "cel" '(flymake-show-buffer-diagnostics :which-key "List errors")
 
-    ;; LSP (eglot)
+;;;;; LSP (eglot)
     "l"   '(:ignore t :which-key "lsp")
     "ll"  '(eglot :which-key "Start LSP")
     "lr"  '(eglot-rename :which-key "Rename symbol")
@@ -550,26 +556,26 @@ With a prefix ARG, prompts for a session name."
     "ld"  '(flymake-show-buffer-diagnostics :which-key "Show diagnostics")
     "ly"  '(my/yank-flymake-error :which-key "Yank error message")
 
-    ;; Global Search/Jump (SPC g)
+;;;;; Global Search/Jump (SPC g)
     "g"   '(:ignore t :which-key "search/jump")
     "gw"  '(my/helix-gw :which-key "Jump to 3-char sequence")
     "gd"  '(xref-find-definitions :which-key "Go to definition")
     "gD"  '(xref-find-definitions-other-window :which-key "Definition other window")
     "gl"  '(git-link :which-key "Copy web link to line")
 
-    ;; Git (magit)
+;;;;; Git (magit)
     "gi"   '(magit-status :which-key "magit status")
 
-    ;; Terminals / Open
+;;;;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
     "ot"  '(term :which-key "Open term")
     "oe"  '(my/frame-isolated-eshell :which-key "Open new eshell")
     "oE"  '(my/project-frame-isolated-eshell :which-key "Open eshell in project")
 
-    ;; Notes
+;;;;; Notes
     "n"  '(org-capture :which-key "New note")
 
-    ;; Workspaces (t)
+;;;;; Workspaces (t)
     "t"   '(:ignore t :which-key "workspaces")
     "tt"  '(tab-bar-switch-to-tab :which-key "Switch workspace")
     "tl"  '(tab-bar-switch-to-next-tab :which-key "Next workspace")
@@ -580,60 +586,60 @@ With a prefix ARG, prompts for a session name."
     )
 
   (doom-local-leader-keys
-    ;; Timestamps
+;;;;; Timestamps
     "d"   '(:ignore t :which-key "dates")
     "dd"  '(org-deadline :which-key "Set deadline")
     "ds"  '(org-schedule :which-key "Schedule")
     "dt"  '(org-time-stamp :which-key "Insert active timestamp")
     "dT"  '(org-time-stamp-inactive :which-key "Insert inactive timestamp")
 
-    ;; Todo
+;;;;; Todo
     "t"   '(org-todo :which-key "Cycle TODO state")
 
-    ;; Links
+;;;;; Links
     "l"   '(:ignore t :which-key "links")
     "ll"  '(org-insert-link :which-key "Insert link")
     "ls"  '(org-store-link :which-key "Store link")
     "lo"  '(org-open-at-point :which-key "Open link")
 
-    ;; Clocking
+;;;;; Clocking
     "c"   '(:ignore t :which-key "clock")
     "ci"  '(org-clock-in :which-key "Clock in")
     "co"  '(org-clock-out :which-key "Clock out")
     "cx"  '(org-clock-cancel :which-key "Cancel clock")
     "cq"  '(org-clock-report :which-key "Clock report")
 
-    ;; Subtree
+;;;;; Subtree
     "s"   '(:ignore t :which-key "subtree")
     "sr"  '(org-refile :which-key "Refile")
     "sa"  '(org-archive-subtree :which-key "Archive")
     "sn"  '(org-narrow-to-subtree :which-key "Narrow to subtree")
     "sw"  '(widen :which-key "Widen")
 
-    ;; Insert
+;;;;; Insert
     "i"   '(:ignore t :which-key "insert")
     "ih"  '(org-insert-heading :which-key "Insert heading")
     "is"  '(org-insert-subheading :which-key "Insert subheading")
     "if"  '(org-footnote-new :which-key "Insert footnote")
 
-    ;; Tags/Properties
+;;;;; Tags/Properties
     "p"   '(org-set-property :which-key "Set property")
     "T"   '(org-set-tags-command :which-key "Set tags")
 
-    ;; Export
+;;;;; Export
     "e"   '(org-export-dispatch :which-key "Export")
     "E"   '((lambda () (interactive) (org-export-dispatch '(4))) :which-key "Export Subtree")
 
-    ;; Babel
+;;;;; Babel
     "b"   '(:ignore t :which-key "tables/babel")
     "bb"  '(org-babel-execute-src-block :which-key "Execute block")
     "be"  '(org-edit-src-code :which-key "Edit src block")
     "bt"  '(org-babel-tangle :which-key "Tangle")
 
-    ;; Priority
+;;;;; Priority
     "P"   '(org-priority :which-key "Set priority")
 
-    ;;; Tables (b) -----------------------------------------------
+;;;;;; Tables (b) -----------------------------------------------
     "b-"   '(org-table-insert-hline :which-key "Insert hline")
     "bir"  '(org-table-insert-row :which-key "Insert row")
     "bic"  '(org-table-insert-column :which-key "Insert column")
@@ -644,10 +650,10 @@ With a prefix ARG, prompts for a session name."
     "bf"   '(org-table-edit-formulas :which-key "Edit formulas")
     "be"   '(org-table-eval-formulas :which-key "Eval formulas")
 
-    ;; Checkbox
+;;;;; Checkbox
     "bx"   '(org-toggle-checkbox :which-key "Toggle Checkbox")
 
-    ;; Misc
+;;;;; Misc
     "'"   '(org-edit-src-code :which-key "Edit src block")
     "RET" '(org-open-at-point :which-key "Follow link")))
 
@@ -1210,6 +1216,21 @@ With a prefix ARG, prompts for a session name."
     (evil-define-key 'normal yafolding-mode-map
       (kbd "TAB") #'yafolding-toggle-element)))
 
+(defun my/apply-patch-from-clipboard ()
+  "Apply unified diff patch directly from system clipboard."
+  (interactive)
+  (let ((default-directory (or (vc-root-dir) default-directory))
+        (patch-str (gui-get-selection 'CLIPBOARD 'STRING)))
+    (unless (and patch-str (stringp patch-str) (not (string-empty-p patch-str)))
+      (user-error "Clipboard does not contain valid patch text"))
+    (with-temp-buffer
+      (insert patch-str)
+      (let ((exit-code (call-process-region (point-min) (point-max) "patch" nil "*Patch Output*" t "-p1")))
+        (if (zerop exit-code)
+            (message "Successfully applied patch from clipboard to %s" default-directory)
+          (display-buffer "*Patch Output*")
+          (error "Failed to apply patch; see *Patch Output* buffer"))))))
+
 ;;;; custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
@@ -1226,7 +1247,9 @@ With a prefix ARG, prompts for a session name."
          imenu-list indent-bars keyfreq magit marginalia markdown-mode
          minimap mood-line no-littering orderless org-modern origami
          ox-gfm perspective powerline projectile rainbow-delimiters rg
-         sublimity tabspaces tldr vertico vterm yafolding)))
+         sublimity tabspaces tldr vertico vterm yafolding))
+ '(safe-local-variable-values
+   '((eval add-hook 'after-save-hook #'org-gfm-export-to-markdown nil t))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
