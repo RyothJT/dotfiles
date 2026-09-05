@@ -436,7 +436,8 @@ With a prefix ARG, prompts for a session name."
       (with-temp-buffer
         (insert clip-text)
         (goto-char (point-min))
-        (while (re-search-forward "^<<<<<<< SEARCH\n\\(\\(?:.\\|\n\\)*?\\)=======\n\\(\\(?:.\\|\n\\)*?\\)>>>>>>> REPLACE" nil t)
+        ;; (while (re-search-forward "^<+ SEARCH\n\\([\\s\\S]*?\\)\n=+\n\\([\\s\\S]*?\\)\n>+ REPLACE" nil t)
+        (while (re-search-forward "^<+ SEARCH\n\\(\\(?:.\\|\n\\)*?\\)=+\n\\(\\(?:.\\|\n\\)*?\\)>+ REPLACE" nil t)
           (let ((search-str (match-string 1))
                 (replace-str (match-string 2)))
             (with-current-buffer (other-buffer (current-buffer) t)
@@ -1108,7 +1109,10 @@ With a prefix ARG, prompts for a session name."
 ;;;; TCL Support
 (use-package tcl
   :ensure nil
-  :mode ("\\.tcl\\'" . tcl-mode)
+  :mode (("\\.tcl\\'" . tcl-mode)
+         ("\\.xdc\\'" . tcl-mode)
+         ("\\.tm\\'"  . tcl-mode))
+  :interpreter ("tclsh" . tcl-mode)
   :config
   (setq tcl-indent-level 2))
 
@@ -1274,20 +1278,14 @@ With a prefix ARG, prompts for a session name."
     (evil-define-key 'normal yafolding-mode-map
       (kbd "TAB") #'yafolding-toggle-element)))
 
-(defun my/apply-patch-from-clipboard ()
-  "Apply unified diff patch directly from system clipboard."
-  (interactive)
-  (let ((default-directory (or (vc-root-dir) default-directory))
-        (patch-str (gui-get-selection 'CLIPBOARD 'STRING)))
-    (unless (and patch-str (stringp patch-str) (not (string-empty-p patch-str)))
-      (user-error "Clipboard does not contain valid patch text"))
-    (with-temp-buffer
-      (insert patch-str)
-      (let ((exit-code (call-process-region (point-min) (point-max) "patch" nil "*Patch Output*" t "-p1")))
-        (if (zerop exit-code)
-            (message "Successfully applied patch from clipboard to %s" default-directory)
-          (display-buffer "*Patch Output*")
-          (error "Failed to apply patch; see *Patch Output* buffer"))))))
+;;;; gcmh - more garbage collection
+(use-package gcmh
+  :defines (gcmh-high-cons-threshold)
+  :functions (gcmh-mode)
+  :ensure t
+  :config
+  (setq gcmh-high-cons-threshold (* 64 1024 1024))
+  (gcmh-mode 1))
 
 ;;;; custom
 (custom-set-variables
@@ -1301,7 +1299,7 @@ With a prefix ARG, prompts for a session name."
  '(package-selected-packages
    '(avy catppuccin-theme centered-cursor-mode consult diff-hl
          evil-collection evil-goggles evil-mc evil-nerd-commenter
-         evil-org evil-surround flyspell-correct general git-link
+         evil-org evil-surround flyspell-correct gcmh general git-link
          imenu-list indent-bars keyfreq magit marginalia markdown-mode
          minimap mood-line no-littering orderless org-modern origami
          ox-gfm perspective powerline projectile rainbow-delimiters rg
