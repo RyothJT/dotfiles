@@ -1287,6 +1287,39 @@ With a prefix ARG, prompts for a session name."
   (setq gcmh-high-cons-threshold (* 64 1024 1024))
   (gcmh-mode 1))
 
+;;;; typst
+(use-package treesit
+  :ensure nil
+  :config
+  (add-to-list 'treesit-language-source-alist
+               '(typst "git@github.com:uben0/tree-sitter-typst.git")))
+
+(use-package typst-ts-mode
+  :custom
+  ;; Automatically compile to PDF on save if desired
+  (typst-ts-mode-watch-options "--open")
+  :config
+  ;; Ensure .typ files automatically open in typst-ts-mode
+  (add-to-list 'auto-mode-alist '("\\.typ\\'" . typst-ts-mode)))
+
+(use-package websocket)
+
+(use-package typst-preview
+  ;; :load-path "path/to/typst-preview.el" ;; if installed manually
+  :init
+  (setq typst-preview-autostart t) ; start preview automatically when typst-preview-mode is activated
+  (setq typst-preview-open-browser-automatically nil) ; open browser automatically when typst-preview-start is run
+  (setq typst-preview-host "127.0.0.1:6973")
+
+  :custom
+  (typst-preview-browser "default") 	; this is the default option; other options are `eaf-browser' or `xwidget'.
+  (typst-preview-invert-colors "true")	; invert colors depending on system theme
+  (typst-preview-executable "tinymist") ; path to tinymist binary (relative or absolute)
+  (typst-preview-partial-rendering t)   ; enable partial rendering 
+  
+  :config
+  (define-key typst-preview-mode-map (kbd "C-c C-j") 'typst-preview-send-position))
+
 ;;;; custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
@@ -1303,7 +1336,8 @@ With a prefix ARG, prompts for a session name."
          imenu-list indent-bars keyfreq magit marginalia markdown-mode
          minimap mood-line no-littering orderless org-modern origami
          ox-gfm perspective powerline projectile rainbow-delimiters rg
-         sublimity tabspaces tldr vertico vterm yafolding))
+         sublimity tabspaces tldr typst-preview vertico vterm
+         websocket yafolding))
  '(safe-local-variable-values
    '((eval add-hook 'after-save-hook #'org-gfm-export-to-markdown nil t))))
 (custom-set-faces
