@@ -165,6 +165,14 @@
   :config
   (load-theme 'catppuccin t))
 
+;;;; image size
+(setq org-image-actual-width '(100))
+(setq org-image-actual-width nil)
+(setq image-responsive-width t)
+(setq auto-window-vscroll nil)
+(setq image-scaling-factor 'auto)
+(setq image-use-external-converter nil)
+
 ;;; session/workspace persistence
 (use-package tabspaces
   :functions tabspaces-mode
@@ -646,9 +654,12 @@ With a prefix ARG, prompts for a session name."
 
 ;;;;; Insert
     "i"   '(:ignore t :which-key "insert")
+    "ii"  '(org-insert-structure-template :which-key "Insert template")
     "ih"  '(org-insert-heading :which-key "Insert heading")
+    "it"  '(org-toggle-heading :which-key "Toggle heading")
     "is"  '(org-insert-subheading :which-key "Insert subheading")
     "if"  '(org-footnote-new :which-key "Insert footnote")
+    "im"  '(yank-media :which-key "Insert media")
 
 ;;;;; Tags/Properties
     "p"   '(org-set-property :which-key "Set property")
@@ -684,6 +695,7 @@ With a prefix ARG, prompts for a session name."
     "bo"   '(my/org-checkbox-open :which-key "Open [ ]")
 
 ;;;;; Misc
+    "v"   '(org-toggle-inline-images :which-key "Toggle inline images")
     "'"   '(org-edit-src-code :which-key "Edit src block")
     "RET" '(org-open-at-point :which-key "Follow link")))
 
@@ -736,6 +748,28 @@ With a prefix ARG, prompts for a session name."
     (interactive)
     (my/org-set-checkbox "[ ]"))
 
+  (defun my/org-find-class-headline ()
+    "Prompt for a class code, store it for the header function, and locate or create its headline."
+    (let ((class-code (completing-read "Class Code: " '("CSCI5607" "EE5301" "EE5327" "EE8350"))))
+      (org-capture-put :class-code class-code)
+      (goto-char (point-min))
+      (if (re-search-forward (format org-complex-heading-regexp-format (regexp-quote class-code)) nil t)
+          (goto-char (line-beginning-position))
+        (goto-char (point-max))
+        (unless (bolp) (insert "\n"))
+        (insert "* " class-code "\n")
+        (forward-line -1))))
+
+  (defun my/org-class-lecture-header ()
+    "Retrieve the stored class code, count existing entries tagged with it, and return the formatted header."
+    (let* ((class-code (org-capture-get :class-code))
+          (file (expand-file-name "~/org/notes.org"))
+          (count (if (file-exists-p file)
+                      (with-current-buffer (find-file-noselect file)
+                        (1+ (length (org-map-entries t (format "+%s" class-code) 'file))))
+                    1)))
+      (format "%s Lecture %d :2026F:%s:" class-code count class-code)))
+
   :hook (find-file . my/auto-insert-org-template)
   :bind (:map org-mode-map
          ("DEL" . my/org-smart-backspace))
@@ -770,6 +804,11 @@ With a prefix ARG, prompts for a session name."
       (file+datetree "~/org/work-log.org")
       "- %?"
       :empty-lines 0)
+
+     ("c" "Class Lecture Note" entry
+      (file+function "~/org/notes.org" my/org-find-class-headline)
+      "* %(my/org-class-lecture-header)\nENTERED: %U\n\n- %?\n"
+      :empty-lines 1)
 
      ("n" "Quick Note" entry
       (file+datetree "~/org/notes.org")
