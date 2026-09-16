@@ -780,6 +780,9 @@ With a prefix ARG, prompts for a session name."
   (org-log-done 'time)
   (org-return-follows-link t)
   (org-hide-emphasis-markers t)
+  (org-pretty-entities t)
+  (org-use-sub-superscripts '{})
+
   (org-agenda-files '("~/org/todo.org"
                       "~/org/meetings"
                       "~/org/notes.org"))
@@ -1213,6 +1216,18 @@ With a prefix ARG, prompts for a session name."
                               f))))))
   (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
 
+;;;; clangd
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               `((c-mode c++-mode c-or-c++-mode)
+                 . ("clangd"
+                    "--compile-commands-dir=build"
+                    "--background-index"
+                    "--inlay-hints=true"))))
+
+(add-hook 'c-mode-hook #'eglot-inlay-hints-mode)
+(add-hook 'c++-mode-hook #'eglot-inlay-hints-mode)
+
 ;;;; powerline
 (use-package powerline
   :defines (projectile-mode-line-prefix
@@ -1359,6 +1374,41 @@ With a prefix ARG, prompts for a session name."
   :config
   (define-key typst-preview-mode-map (kbd "C-c C-j") 'typst-preview-send-position))
 
+(defun my/org-typst-preview-region (start end)
+  "Compile selection to SVG via Typst CLI and display inline."
+  (interactive "r")
+  (let* ((text (buffer-substring-no-properties start end))
+         (tmp-typ (make-temp-file "org-typst-" nil ".typ"))
+         (tmp-svg (make-temp-file "org-typst-" nil ".svg")))
+    (write-region (concat "$ " text " $") nil tmp-typ)
+    (if (zerop (call-process "typst" nil nil nil "compile" tmp-typ tmp-svg))
+        (let ((ov (make-overlay start end)))
+          (overlay-put ov 'display (create-image tmp-svg 'svg nil :ascent 'center))
+          (overlay-put ov 'evaporate t))
+      (message "Typst compilation failed."))))
+
+;;;; markdown mode
+(use-package markdown-mode
+  :ensure t
+  :mode ("\\.md\\'" . gfm-mode)
+  :init
+  ;; Use gfm-mode (GitHub Flavored Markdown) for previewing and code block features
+  (setq markdown-command "multimarkdown")
+  :config
+  ;; Enable syntax highlighting inside code blocks in the main buffer
+  (setq markdown-fontify-code-blocks-natively t)
+  
+  ;; Map markdown language identifiers to Emacs major modes
+  (setq markdown-code-lang-modes
+        '(("elisp" . emacs-lisp-mode)
+          ("c++" . c++-mode)
+          ("cpp" . c++-mode)
+          ("py" . python-mode)
+          ("python" . python-mode)
+          ("json" . js-mode)
+          ("sh" . sh-mode)
+          ("bash" . sh-mode))))
+
 ;;;; custom
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
@@ -1374,9 +1424,9 @@ With a prefix ARG, prompts for a session name."
          evil-org evil-surround flyspell-correct gcmh general git-link
          imenu-list indent-bars keyfreq magit marginalia markdown-mode
          minimap mood-line no-littering orderless org-modern origami
-         ox-gfm perspective powerline projectile rainbow-delimiters rg
-         sublimity tabspaces tldr typst-preview vertico vterm
-         websocket yafolding))
+         ox-gfm ox-typst perspective powerline projectile
+         rainbow-delimiters rg sublimity tabspaces tldr typst-preview
+         vertico vterm websocket yafolding))
  '(safe-local-variable-values
    '((eval add-hook 'after-save-hook #'org-gfm-export-to-markdown nil t))))
 (custom-set-faces
