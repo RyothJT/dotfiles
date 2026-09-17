@@ -869,14 +869,22 @@ With a prefix ARG, prompts for a session name."
         (forward-line -1))))
 
   (defun my/org-class-lecture-header ()
-    "Retrieve the stored class code, count existing entries tagged with it, and return the formatted header."
+    "Retrieve the stored class code, find highest lecture number, and return header with that + 1."
     (let* ((class-code (org-capture-get :class-code))
-          (file (expand-file-name "~/org/notes.org"))
-          (count (if (file-exists-p file)
-                      (with-current-buffer (find-file-noselect file)
-                        (1+ (length (org-map-entries t (format "+%s" class-code) 'file))))
-                    1)))
-      (format "%s Lecture %d :2026F:%s:" class-code count class-code)))
+           (file (expand-file-name "~/org/notes.org"))
+           (next-num
+            (if (file-exists-p file)
+                (with-current-buffer (find-file-noselect file)
+                  (save-excursion
+                    (goto-char (point-min))
+                    (let ((max-num 0)
+                          (re (format "^\\*+\\s-+%s\\s-+Lecture\\s-+\\([0-9]+\\)"
+                                      (regexp-quote class-code))))
+                      (while (re-search-forward re nil t)
+                        (setq max-num (max max-num (string-to-number (match-string 1)))))
+                      (1+ max-num))))
+              1)))
+      (format "%s Lecture %d :2026F:%s:" class-code next-num class-code)))
 
   :hook (find-file . my/auto-insert-org-template)
   :bind (:map org-mode-map
