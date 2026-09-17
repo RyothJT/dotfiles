@@ -207,7 +207,13 @@
   :custom
   (catppuccin-flavor 'macchiato)
   :config
-  (load-theme 'catppuccin t))
+  (load-theme 'catppuccin t)
+
+  ;; Elevated background pill with bright text
+  (set-face-attribute 'org-table nil
+                      :foreground (catppuccin-get-color 'lavender)
+                      :background (catppuccin-get-color 'surface0)
+                      :weight 'normal))
 
 ;;;; image size
 (setq org-image-actual-width '(100))
@@ -956,7 +962,7 @@ With a prefix ARG, prompts for a session name."
   (org-modern-star '("◉" "○" "◆" "◇" "▶"))   ; custom heading bullets
   (org-modern-list '((?- . "•") (?+ . "◦") (?* . "▸")))  ; list markers
   (org-modern-checkbox '((?  . "☐") (?X . "☑") (?- . "◫")))
-  (org-modern-table t)
+  (org-modern-table nil)                      ; <-- Completely disable org-modern's table styling
   (org-modern-block-name t)
   (org-modern-label ((t (:height 0.9 :weight bold :inherit nil))))
   (org-modern-todo-faces
@@ -1051,6 +1057,7 @@ With a prefix ARG, prompts for a session name."
   (tab-bar-mode 1)
   :custom
   (tab-bar-new-tab-to 'right)
+  (tab-bar-drag-to-move-tabs t)      ; <-- Allows dragging workspace tabs with the mouse!
   (tab-bar-new-tab-choice "*scratch*") ; Start new tabs in *scratch* to avoid cloning buffers
   (tab-bar-tabs-function #'my/persp-tab-bar-tabs)
   :config
