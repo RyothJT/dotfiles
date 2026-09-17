@@ -66,15 +66,59 @@
 (undelete-frame-mode 1)
 
 ;;;; tabs & tab-line keybindings
+(defun my/tab-line-persp-buffers ()
+  "Return window buffers scoped to the active perspective, respecting tab closing."
+  (let* ((win-bufs (tab-line-tabs-window-buffers))
+         (persp-bufs (when (and (bound-and-true-p persp-mode)
+                                (fboundp 'persp-current-buffers))
+                       (persp-current-buffers)))
+         ;; 1. Only show buffers belonging to the current perspective
+         (scoped-bufs (if persp-bufs
+                          (seq-filter (lambda (b) (member b persp-bufs)) win-bufs)
+                        win-bufs))
+         ;; 2. Filter out internal buffers (names starting with space)
+         (live-bufs (seq-filter (lambda (b)
+                                  (and (buffer-live-p b)
+                                       (not (string-prefix-p " " (buffer-name b)))))
+                                scoped-bufs))
+         ;; 3. Filter out *special* buffers if normal file tabs are open
+         (file-bufs (seq-filter (lambda (b)
+                                  (not (string-match-p "\\`\\*.*\\*\\'" (buffer-name b))))
+                                live-bufs))
+         (cand-bufs (cond
+                     (file-bufs
+                      (if (and (buffer-live-p (current-buffer))
+                               (not (member (current-buffer) file-bufs))
+                               (not (string-prefix-p " " (buffer-name))))
+                          (append file-bufs (list (current-buffer)))
+                        file-bufs))
+                     (live-bufs live-bufs)
+                     (t (list (current-buffer)))))
+         ;; 4. Lock visual tab order so H and L do not reorder tabs on screen
+         (old-order (window-parameter nil 'tab-line-ordered-buffers))
+         (ordered (seq-filter (lambda (b) (member b cand-bufs)) old-order))
+         (new-bufs (seq-remove (lambda (b) (member b ordered)) cand-bufs))
+         (final-bufs (append ordered new-bufs)))
+    (set-window-parameter nil 'tab-line-ordered-buffers final-bufs)
+    final-bufs))
+
+(defun my/close-tab-or-bury-buffer ()
+  "Close current tab on the tab-line without killing the buffer (same as clicking tab x)."
+  (interactive)
+  (if (bound-and-true-p global-tab-line-mode)
+      (tab-line-close-tab)
+    (bury-buffer)))
+
 (use-package tab-line
-  :ensure nil ; Built-in package
+  :ensure nil
   :functions (tab-line-switch-to-prev-tab
-              tab-line-switch-to-next-tab)
+              tab-line-switch-to-next-tab
+              tab-line-close-tab)
   :init
   (global-tab-line-mode 1)
   :custom
+  (tab-line-tabs-function #'my/tab-line-persp-buffers)
   (tab-line-tab-name-function #'tab-line-tab-name-buffer)
-  (tab-line-exclude-buffers '("\\`\\*.*\\*'"))
   :config
   (with-eval-after-load 'general
     (general-def :keymaps 'override :states '(normal motion visual)
@@ -174,58 +218,98 @@
 (setq image-use-external-converter nil)
 
 ;;; session/workspace persistence
-(use-package tabspaces
-  :functions tabspaces-mode
+(require 'cl-lib)
+
+(use-package perspective
   :custom
-  (tabspaces-use-filtered-buffers-as-default t)
-  (tabspaces-default-tab "Main")
-  (tabspaces-initialize-project-with-todo nil)
+  (persp-mode-prefix-key (kbd "C-c M-p"))
+  (persp-initial-frame-name "Main")
+  :init
+  (persp-mode 1)
   :config
-  (tabspaces-mode 1))
+  (setq confirm-kill-processes nil) ; Prevent prompt about active processes on exit
 
-(use-package desktop
-  :ensure nil ; Built-in package
-  :custom
-  (desktop-dirname (no-littering-expand-var-file-name "desktop/"))
-  (desktop-path (list (no-littering-expand-var-file-name "desktop/")))
-  (desktop-base-filename "emacs.desktop")
-  (desktop-files-not-to-save "^$")
-  (desktop-load-locked-desktop t)
-  :config
-  (desktop-save-mode 1))
+  (defvar my/persp-state-file
+    (if (fboundp 'no-littering-expand-var-file-name)
+        (no-littering-expand-var-file-name "perspective-state.el")
+      (expand-file-name "perspective-state.el" user-emacs-directory)))
 
-(defun my/tab-bar-select-or-create ()
-  "Prompt Vertico for tabs. Switch if chosen, or create a new tab if novel."
-  (interactive)
-  (let* ((existing-tabs (mapcar (lambda (tab) (alist-get 'name tab)) (tab-bar-tabs)))
-         (choice (completing-read "Switch or Create Tab: " existing-tabs)))
-    (if (member choice existing-tabs)
-        (tab-bar-select-tab-by-name choice)
-      (when (not (string-empty-p choice))
-        (tab-bar-new-tab)
-        (tab-bar-rename-tab choice)
-        (bury-buffer)))))
+  ;; Save silently without overwrite prompts
+  (defun my/persp-save-session ()
+    "Save perspective state silently without confirmation prompts."
+    (interactive)
+    (when (bound-and-true-p persp-mode)
+      (cl-letf (((symbol-function 'y-or-n-p) #'always)
+                ((symbol-function 'yes-or-no-p) #'always))
+        (persp-state-save my/persp-state-file))
+      (message "Perspective session saved.")))
 
-;;;; no-littering
-(use-package no-littering
-  :ensure t
-  :config
-  (require 'no-littering)
-  ;; Disable lockfiles (.#filename)
-  (setq create-lockfiles nil)
+  ;; Load silently without overwrite prompts
+  (defun my/persp-load-session ()
+    "Load perspective state silently without confirmation prompts."
+    (interactive)
+    (when (and (bound-and-true-p persp-mode)
+               (file-exists-p my/persp-state-file))
+      (cl-letf (((symbol-function 'y-or-n-p) #'always)
+                ((symbol-function 'yes-or-no-p) #'always))
+        (persp-state-load my/persp-state-file))
+      (tab-bar-mode 1)
+      (message "Perspective session loaded.")))
 
-  ;; Backup settings (filename~)
-;; Backup settings (redirected to var directory)
-  (setq make-backup-files t
-        version-control t
-        delete-old-versions t
-        kept-new-versions 6
-        kept-old-versions 2
-        backup-directory-alist `((".*" . ,(no-littering-expand-var-file-name "backup/"))))
+  (defun my/quit-emacs ()
+    "Save files and workspace state, then quit Emacs with zero prompts."
+    (interactive)
+    (save-some-buffers t)
+    (my/persp-save-session)
+    (let ((confirm-kill-emacs nil)
+          (confirm-kill-processes nil)
+          (kill-emacs-query-functions nil))
+      (cl-letf (((symbol-function 'yes-or-no-p) #'always)
+                ((symbol-function 'y-or-n-p) #'always))
+        (kill-emacs))))
 
-  ;; Redirect auto-save files (#filename#) to no-littering var directory
-  (setq auto-save-file-name-transforms
-        `((".*" ,(no-littering-expand-var-file-name "auto-save/") t))))
+  (defun my/restart-emacs ()
+    "Save files and workspace state, then restart Emacs with zero prompts."
+    (interactive)
+    (save-some-buffers t)
+    (my/persp-save-session)
+    (let ((confirm-kill-emacs nil)
+          (confirm-kill-processes nil)
+          (kill-emacs-query-functions nil))
+      (cl-letf (((symbol-function 'yes-or-no-p) #'always)
+                ((symbol-function 'y-or-n-p) #'always))
+        (if (fboundp 'restart-emacs)
+            (restart-emacs)
+          (kill-emacs)))))
+
+  ;; Auto-save on exit without prompting
+  (add-hook 'kill-emacs-hook #'my/persp-save-session)
+
+  ;; Auto-load on startup without prompting
+  (add-hook 'emacs-startup-hook #'my/persp-load-session)
+
+  (setq persp-show-modestring nil)
+
+  ;; Generate tab-bar tabs for all perspectives
+  (defun my/persp-tab-bar-tabs ()
+    "Generate tab-bar tabs from active perspectives."
+    (let ((current (persp-current-name)))
+      (mapcar (lambda (name)
+                (if (string= name current)
+                    `(current-tab (name . ,name))
+                  `(tab (name . ,name))))
+              (persp-names))))
+
+  (setq tab-bar-tabs-function #'my/persp-tab-bar-tabs)
+
+  ;; Enable clicking tabs to switch perspectives
+  (defun my/persp-tab-bar-select-tab (orig-fn &optional tab-number)
+    (if (bound-and-true-p persp-mode)
+        (let* ((names (persp-names))
+               (target (nth (1- (or tab-number 1)) names)))
+          (when target (persp-switch target)))
+      (funcall orig-fn tab-number)))
+  (advice-add 'tab-bar-select-tab :around #'my/persp-tab-bar-select-tab))
 
 ;;; evil mode
 ;;;; evil package
@@ -358,6 +442,12 @@
   (if (yes-or-no-p "Really delete current tab? ")
       (tab-bar-close-tab)
     (message "Tab deletion canceled.")))
+
+(with-eval-after-load 'ibuffer
+  (add-hook 'ibuffer-hook
+            (lambda ()
+              (when (bound-and-true-p persp-mode)
+                (persp-ibuffer-set-filter-groups)))))
 
 ;;;; eshell fix
 (use-package eshell
@@ -499,10 +589,10 @@ With a prefix ARG, prompts for a session name."
 
 ;;;;; Quit / Session
     "q"   '(:ignore t :which-key "quit/session")
-    "qq"  '(save-buffers-kill-terminal :which-key "Quit Emacs")
-    "qs"  '((lambda () (interactive) (desktop-save desktop-dirname)) :which-key "Save session")
-    "ql"  '((lambda () (interactive) (desktop-read desktop-dirname)) :which-key "Load session")
-    "qr"  '(restart-emacs :which-key "Restart Emacs")
+    "qq"  '(my/quit-emacs :which-key "Quit Emacs")
+    "qs"  '(my/persp-save-session :which-key "Save session")
+    "ql"  '(my/persp-load-session :which-key "Load session")
+    "qr"  '(my/restart-emacs :which-key "Restart Emacs")
 
 ;;;;; Files
     "f"   '(:ignore t :which-key "files")
@@ -519,12 +609,12 @@ With a prefix ARG, prompts for a session name."
 
 ;;;;; Buffers
     "b"   '(:ignore t :which-key "buffers")
-    "bb"  '(consult-buffer :which-key "Switch workspace buffer")
-    "bB"  '(switch-to-buffer :which-key "Switch global buffer")
+    "bb"  '(my/consult-workspace-buffer :which-key "Switch workspace buffer")
+    "bB"  '(my/consult-global-buffer :which-key "Switch global buffer")
+    "bk"  '(persp-kill-buffer* :which-key "Kill buffer (this workspace)")
+    "bc"  '(persp-remove-buffer :which-key "Remove buffer from workspace")
     "bi"  '(ibuffer :which-key "List all buffers")
     "bd"  '(bury-buffer :which-key "Bury buffer")
-    "bc"  '(tabspaces-remove-selected-buffer :which-key "Remove buffer from workspace")
-    "bk"  '(kill-current-buffer :which-key "Remove buffer from workspace")
     "br"  '(revert-buffer :which-key "Revert buffer")
     "bm"  '((lambda () (interactive) (switch-to-buffer "*Messages*")) :which-key "Messages buffer")
 
@@ -613,12 +703,12 @@ With a prefix ARG, prompts for a session name."
 
 ;;;;; Workspaces (t)
     "t"   '(:ignore t :which-key "workspaces")
-    "tt"  '(tab-bar-switch-to-tab :which-key "Switch workspace")
-    "tl"  '(tab-bar-switch-to-next-tab :which-key "Next workspace")
-    "th"  '(tab-bar-switch-to-prev-tab :which-key "Prev workspace")
-    "to"  '(my/tab-bar-select-or-create :which-key "New workspace")
-    "td"  '(my/safely-close-workspace :which-key "Delete workspace") ; Added explicit confirmation check
-    "tr"  '(tab-bar-rename-tab :which-key "Rename workspace")
+    "tt"  '(persp-switch :which-key "Switch or create workspace")
+    "to"  '(persp-switch :which-key "New workspace")
+    "td"  '(persp-kill :which-key "Delete workspace")
+    "tr"  '(persp-rename :which-key "Rename workspace")
+    "tl"  '(persp-next :which-key "Next workspace")
+    "th"  '(persp-prev :which-key "Prev workspace")
     )
 
   (doom-local-leader-keys
@@ -681,8 +771,8 @@ With a prefix ARG, prompts for a session name."
 ;;;;;; Tables
     "b-"   '(org-table-insert-hline :which-key "Insert hline")
     "bi"   '(:ignore t :which-key "table insert")
-    "bir"  '(org-table-insert-row :which-key "Insert row")
-    "bic"  '(org-table-insert-column :which-key "Insert column")
+    ;; "bir"  '(org-table-insert-row :which-key "Insert row")
+    ;; "bic"  '(org-table-insert-column :which-key "Insert column")
     "bdc"  '(org-table-delete-column :which-key "Delete column")
     "ba"   '(org-table-align :which-key "Align table")
     "bs"   '(org-table-sort-lines :which-key "Sort rows")
@@ -961,6 +1051,8 @@ With a prefix ARG, prompts for a session name."
   (tab-bar-mode 1)
   :custom
   (tab-bar-new-tab-to 'right)
+  (tab-bar-new-tab-choice "*scratch*") ; Start new tabs in *scratch* to avoid cloning buffers
+  (tab-bar-tabs-function #'my/persp-tab-bar-tabs)
   :config
   ;; Enhance Active Tab Visibility
   (let ((bg-active    (catppuccin-get-color 'mauve))    ; Active tab background
@@ -1056,16 +1148,68 @@ With a prefix ARG, prompts for a session name."
 
 ;;;; consult (Search with live previews)
 (use-package consult
-  :functions (consult-fd consult-find)
+  :functions (consult-fd consult-find consult-buffer consult--buffer-query)
   :custom
   (consult-narrow-key "<")
   :config
+  (require 'consult)
+
   (defun my/consult-recursive-file ()
     "Recursively find a file below `default-directory'."
     (interactive)
     (if (executable-find "fd")
         (consult-fd default-directory)
-      (consult-find default-directory))))
+      (consult-find default-directory)))
+
+  ;; Custom perspective source for consult-buffer (ignoring *star* buffers)
+  (setq my/consult--source-perspective
+        (list :name     "Workspace Buffers"
+              :narrow   ?w
+              :history  'buffer-name-history
+              :category 'buffer
+              :state    #'consult--buffer-state
+              :default  t
+              :items    (lambda ()
+                          (consult--buffer-query
+                           :predicate
+                           (lambda (buf)
+                             (let ((name (buffer-name buf)))
+                               (and ;; Ignore buffers with * (special buffers) and space (internal buffers)
+                                    (not (string-match-p "\\`\\*.*\\*\\'" name))
+                                    (not (string-prefix-p " " name))
+                                    ;; Ensure buffer belongs to current perspective
+                                    (if (bound-and-true-p persp-mode)
+                                        (member (if (bufferp buf) buf (get-buffer buf))
+                                                (if (fboundp 'persp-current-buffers)
+                                                    (persp-current-buffers)
+                                                  (persp-buffer-list)))
+                                      t))))
+                           :sort 'visibility
+                           :as #'buffer-name))))
+
+  ;; Safely assemble available sources without void-variable errors
+  (defun my/consult-workspace-buffer ()
+    "Switch to a buffer in the active workspace."
+    (interactive)
+    (let ((sources (delq nil
+                         (list my/consult--source-perspective
+                               (when (boundp 'consult--source-recent-file)
+                                 consult--source-recent-file)
+                               (when (boundp 'consult--source-bookmark)
+                                 consult--source-bookmark)))))
+      (consult-buffer sources)))
+
+  (defun my/consult-global-buffer ()
+    "Switch to any open buffer across all workspaces."
+    (interactive)
+    (let ((sources (delq nil
+                         (list (when (boundp 'consult--source-buffer)
+                                 consult--source-buffer)
+                               (when (boundp 'consult--source-recent-file)
+                                 consult--source-recent-file)
+                               (when (boundp 'consult--source-bookmark)
+                                 consult--source-bookmark)))))
+      (consult-buffer sources))))
 
 ;;;; magit
 (use-package magit
