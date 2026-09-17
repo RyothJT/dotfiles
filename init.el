@@ -66,8 +66,29 @@
 (undelete-frame-mode 1)
 
 ;;;; tabs & tab-line keybindings
+(defvar-local my/buffer-last-edit-time nil
+  "Timestamp of the most recent edit to this buffer.")
+
+(defun my/record-buffer-edit (&rest _)
+  "Record timestamp when a buffer is modified or opened."
+  (setq my/buffer-last-edit-time (float-time)))
+
+(add-hook 'after-change-functions #'my/record-buffer-edit)
+(add-hook 'find-file-hook #'my/record-buffer-edit)
+
+(defun my/buffer-edit-time (buf)
+  "Return timestamp of last edit for BUF (or disk modtime, or 0.0)."
+  (if (buffer-live-p buf)
+      (with-current-buffer buf
+        (or my/buffer-last-edit-time
+            (when-let ((file (buffer-file-name buf)))
+              (when (file-exists-p file)
+                (float-time (file-attribute-modification-time (file-attributes file)))))
+            0.0))
+    0.0))
+
 (defun my/tab-line-persp-buffers ()
-  "Return window buffers scoped to the active perspective, respecting tab closing."
+  "Return window buffers scoped to active perspective, sorted by most recently edited."
   (let* ((win-bufs (tab-line-tabs-window-buffers))
          (persp-bufs (when (and (bound-and-true-p persp-mode)
                                 (fboundp 'persp-current-buffers))
@@ -93,21 +114,12 @@
                           (append file-bufs (list (current-buffer)))
                         file-bufs))
                      (live-bufs live-bufs)
-                     (t (list (current-buffer)))))
-         ;; 4. Lock visual tab order so H and L do not reorder tabs on screen
-         (old-order (window-parameter nil 'tab-line-ordered-buffers))
-         (ordered (seq-filter (lambda (b) (member b cand-bufs)) old-order))
-         (new-bufs (seq-remove (lambda (b) (member b ordered)) cand-bufs))
-         (final-bufs (append ordered new-bufs)))
-    (set-window-parameter nil 'tab-line-ordered-buffers final-bufs)
-    final-bufs))
-
-(defun my/close-tab-or-bury-buffer ()
-  "Close current tab on the tab-line without killing the buffer (same as clicking tab x)."
-  (interactive)
-  (if (bound-and-true-p global-tab-line-mode)
-      (tab-line-close-tab)
-    (bury-buffer)))
+                     (t (list (current-buffer))))))
+    ;; 4. Sort tabs by most recently edited (newest on the left)
+    (sort (copy-sequence cand-bufs)
+          (lambda (a b)
+            (> (my/buffer-edit-time a)
+               (my/buffer-edit-time b))))))
 
 (use-package tab-line
   :ensure nil
