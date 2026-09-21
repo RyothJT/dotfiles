@@ -16,6 +16,25 @@
 (unless package-archive-contents
   (package-refresh-contents))
 
+;;;; no-littering (redirects backups, autosaves, and caches)
+(use-package no-littering
+  :ensure t
+  :config
+  (require 'no-littering)
+  ;; Disable lockfiles (.#filename)
+  (setq create-lockfiles nil)
+
+  ;; Redirect backup files (filename~) to ~/.emacs.d/var/backup/
+  (setq make-backup-files t
+        version-control t
+        delete-old-versions t
+        kept-new-versions 6
+        kept-old-versions 2
+        backup-directory-alist `((".*" . ,(no-littering-expand-var-file-name "backup/"))))
+
+  ;; Redirect auto-save files (#filename#) to ~/.emacs.d/var/auto-save/
+  (setq auto-save-file-name-transforms
+        `((".*" ,(no-littering-expand-var-file-name "auto-save/") t))))
 ;;;; identity
 (setq user-full-name "Justin Troth"
       user-mail-address "justin.troth@gd-ms.com")
