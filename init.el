@@ -378,7 +378,8 @@
     "U"     #'undo-redo
     "gq"    #'fill-paragraph
     "j"     #'evil-next-visual-line
-    "k"     #'evil-previous-visual-line)
+    "k"     #'evil-previous-visual-line
+    "q"     #'delete-window)
   (evil-define-key 'visual 'global
     "gq"    #'fill-region
     "j"     #'evil-next-visual-line
@@ -1283,10 +1284,10 @@ With a prefix ARG, prompts for a session name."
     (define-key map (kbd "SPC") nil))
   (evil-define-key '(normal visual motion) magit-mode-map (kbd "SPC") nil)
   (general-def :states 'normal :keymaps 'magit-mode-map
-    "<escape>" #'magit-mode-bury-buffer)
+    "q" #'magit-mode-bury-buffer)
   (with-eval-after-load 'git-commit
     (general-def :states 'normal :keymaps 'git-commit-mode-map
-      "<escape>" #'with-editor-cancel)))
+      "q" #'with-editor-cancel)))
 
 ;;;; diff-hl - Git diff indicators in fringe/gutter
 (use-package diff-hl
