@@ -560,32 +560,16 @@ With a prefix ARG, prompts for a session name."
         (message "Copied file to clipboard: %s" path))
     (message "Buffer is not visiting a file!")))
 
-(defun my/apply-search-replace-from-clipboard ()
-  "Apply Aider-style SEARCH/REPLACE block(s) from the Wayland clipboard to the current buffer."
+(defun my/replace-buffer-with-clipboard ()
+  "Replace the entire contents of the current buffer with the clipboard."
   (interactive)
-  (let ((clip-text (gui-get-selection 'CLIPBOARD 'STRING))
-        (matches 0))
+  (let ((clip-text (gui-get-selection 'CLIPBOARD 'STRING)))
     (unless (and clip-text (not (string-empty-p clip-text)))
       (user-error "Clipboard is empty!"))
-    (save-excursion
-      (with-temp-buffer
-        (insert clip-text)
-        (goto-char (point-min))
-        ;; (while (re-search-forward "^<+ SEARCH\n\\([\\s\\S]*?\\)\n=+\n\\([\\s\\S]*?\\)\n>+ REPLACE" nil t)
-        (while (re-search-forward "^<+ SEARCH\n\\(\\(?:.\\|\n\\)*?\\)=+\n\\(\\(?:.\\|\n\\)*?\\)>+ REPLACE" nil t)
-          (let ((search-str (match-string 1))
-                (replace-str (match-string 2)))
-            (with-current-buffer (other-buffer (current-buffer) t)
-              (save-excursion
-                (goto-char (point-min))
-                (if (search-forward search-str nil t)
-                    (progn
-                      (replace-match replace-str t t)
-                      (cl-incf matches))
-                  (message "Could not find match for search block:\n%s" search-str))))))))
-    (if (> matches 0)
-        (message "Successfully applied %d SEARCH/REPLACE block(s)." matches)
-      (error "No SEARCH/REPLACE blocks were matched or applied."))))
+    (erase-buffer)
+    (insert clip-text)
+    (goto-char (point-min))
+    (message "Replaced buffer contents with clipboard.")))
 
 ;;; general.el (leader key)
 (use-package general
@@ -642,7 +626,7 @@ With a prefix ARG, prompts for a session name."
     "fP" '(my/open-config-file :which-key "Open config")
     "fy" '(my/yank-file-path :which-key "Yank file path")
     "fY" '(my/copy-current-file-to-clipboard :which-key "Copy file to clipboard")
-    "fA" '(my/apply-search-replace-from-clipboard :which-key "Apply patch from clipboard")
+    "fr" '(my/replace-buffer-with-clipboard :which-key "Replace file contents with clipboard")
 
 ;;;;; Buffers
     "b"   '(:ignore t :which-key "buffers")
@@ -1418,6 +1402,18 @@ With a prefix ARG, prompts for a session name."
 (add-hook 'c-mode-hook #'eglot-inlay-hints-mode)
 (add-hook 'c++-mode-hook #'eglot-inlay-hints-mode)
 
+;;;; corfu
+(use-package corfu
+  :ensure t
+  :init
+  (global-corfu-mode)
+  :custom
+  (corfu-auto t)                 ; Enable auto-popup
+  (corfu-auto-delay 0.0)         ; Popup delay (seconds)
+  (corfu-auto-prefix 1)          ; Minimum characters before trigger
+  :hook
+  (org-mode . (lambda () (corfu-mode -1))))
+
 ;;;; powerline
 (use-package powerline
   :defines (projectile-mode-line-prefix
@@ -1605,11 +1601,12 @@ With a prefix ARG, prompts for a session name."
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(auth-source-save-behavior nil)
  '(custom-safe-themes
    '("c4df9006b9eb32599d758800a32f3487c2cdf13826084511783b47d419024af2"
      default))
  '(package-selected-packages
-   '(avy catppuccin-theme centered-cursor-mode consult diff-hl
+   '(avy catppuccin-theme centered-cursor-mode consult corfu diff-hl
          evil-collection evil-goggles evil-mc evil-nerd-commenter
          evil-org evil-surround flyspell-correct gcmh general git-link
          imenu-list indent-bars keyfreq magit marginalia markdown-mode
