@@ -493,16 +493,6 @@
         (kbd "C-<return>") #'newline)))
   (add-hook 'eshell-mode-hook #'my/eshell-swap-return-keys))
 
-(defun my/frame-isolated-eshell (&optional arg)
-  "Open or create an Eshell buffer unique to the current frame.
-With a prefix ARG, prompts for a session name."
-  (interactive "P")
-  (let* ((frame-id (frame-parameter nil 'window-id))
-         (buf-name (format "*eshell-%s*" frame-id)))
-    (cond
-     (arg (call-interactively #'eshell))
-     (t (eshell buf-name)))))
-
 (defun my/project-frame-isolated-eshell (&optional arg)
   "Open the frame-local Eshell at the current project root."
   (interactive "P")
@@ -558,6 +548,7 @@ With a prefix ARG, prompts for a session name."
     (goto-char (point-min))
     (message "Replaced buffer contents with clipboard.")))
 
+;;;; custom format
 (defun my/format-buffer ()
   "Universal format command.
 Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
@@ -626,6 +617,12 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
     (save-excursion
       (indent-region (point-min) (point-max)))
     (message "Indented buffer."))))
+
+;;;; custom org
+(defun my/org-insert-src-block ()
+  "Insert a #+begin_src ... #+end_src block directly (equivalent to `C-c C-, s`)."
+  (interactive)
+  (org-insert-structure-template "src"))
 
 ;;; general.el (leader key)
 (use-package general
@@ -699,8 +696,6 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
     "w"   '(:ignore t :which-key "windows")
     "wv"  '(split-window-right :which-key "Split vertical")
     "ws"  '(split-window-below :which-key "Split horizontal")
-    "ww"  '(other-window :which-key "Other window")
-    "wo"  '(delete-other-windows :which-key "Delete other windows")
     "wh"  '(windmove-left :which-key "Window left")
     "wl"  '(windmove-right :which-key "Window right")
     "wk"  '(windmove-up :which-key "Window up")
@@ -717,7 +712,6 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
 
 ;;;;; Search
     "ss"  '(consult-line :which-key "Search line in buffer")
-    "sf"  '(my/consult-recursive-file :which-key "Find file from here")
     "s/"  '(consult-ripgrep :which-key "Find in project")
     "so"  '(occur :which-key "Find in buffer")
     "si"  '(consult-imenu :which-key "Jump to symbol")
@@ -738,10 +732,8 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
 ;;;;; Code
     "c"   '(:ignore t :which-key "code")
     "cc"  '(project-compile :which-key "Compile")
-    "cC"  '(project-recompile :which-key "Recompile")
     "ck"  '(kill-compilation :which-key "Kill compilation")
     "cw"  '(delete-trailing-whitespace :which-key "Delete whitespace")
-    "cr"  '(xref-find-references :which-key "Find references")
 
 ;;;;; Errors (flymake)
     "ce"  '(:ignore t :which-key "errors")
@@ -763,7 +755,6 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
     "g"   '(:ignore t :which-key "search/jump")
     "gw"  '(my/helix-gw :which-key "Jump to 3-char sequence")
     "gd"  '(xref-find-definitions :which-key "Go to definition")
-    "gD"  '(xref-find-definitions-other-window :which-key "Definition other window")
     "gl"  '(git-link :which-key "Copy web link to line")
 
 ;;;;; Git (magit)
@@ -772,8 +763,7 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
 ;;;;; Terminals / Open
     "o"   '(:ignore t :which-key "open")
     "ot"  '(term :which-key "Open term")
-    "oe"  '(my/frame-isolated-eshell :which-key "Open new eshell")
-    "oE"  '(my/project-frame-isolated-eshell :which-key "Open eshell in project")
+    "oe"  '(my/project-frame-isolated-eshell :which-key "Open eshell in project")
 
 ;;;;; Notes
     "n"  '(org-capture :which-key "New note")
@@ -788,82 +778,49 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
     "th"  '(persp-prev :which-key "Prev workspace")
     )
 
+;;;;; org mode keybinds
   (doom-local-leader-keys
-;;;;; Timestamps
-    "d"   '(:ignore t :which-key "dates")
-    "dd"  '(org-deadline :which-key "Set deadline")
-    "ds"  '(org-schedule :which-key "Schedule")
-    "dt"  '(org-time-stamp :which-key "Insert active timestamp")
-    "dT"  '(org-time-stamp-inactive :which-key "Insert inactive timestamp")
-
-;;;;; Todo
+;;;;;; Top-Level Essentials (High Frequency)
+    "c"   '(my/org-insert-src-block :which-key "Insert src block") ; <-- Instant #+begin_src
+    "'"   '(org-edit-special :which-key "Edit code block")
+    "v"   '(org-toggle-inline-images :which-key "Toggle images")
     "t"   '(org-todo :which-key "Cycle TODO state")
-
-;;;;; Links
-    "l"   '(:ignore t :which-key "links")
-    "ll"  '(org-insert-link :which-key "Insert link")
-    "ls"  '(org-store-link :which-key "Store link")
-    "lo"  '(org-open-at-point :which-key "Open link")
-
-;;;;; Clocking
-    "c"   '(:ignore t :which-key "clock")
-    "ci"  '(org-clock-in :which-key "Clock in")
-    "co"  '(org-clock-out :which-key "Clock out")
-    "cx"  '(org-clock-cancel :which-key "Cancel clock")
-    "cq"  '(org-clock-report :which-key "Clock report")
-
-;;;;; Subtree
-    "s"   '(:ignore t :which-key "subtree")
-    "sr"  '(org-refile :which-key "Refile")
-    "sa"  '(org-archive-subtree :which-key "Archive")
-    "sn"  '(org-narrow-to-subtree :which-key "Narrow to subtree")
-    "sw"  '(widen :which-key "Widen")
-
-;;;;; Insert
-    "i"   '(:ignore t :which-key "insert")
-    "ii"  '(org-insert-structure-template :which-key "Insert template")
-    "ih"  '(org-insert-heading :which-key "Insert heading")
-    "it"  '(org-toggle-heading :which-key "Toggle heading")
-    "is"  '(org-insert-subheading :which-key "Insert subheading")
-    "if"  '(org-footnote-new :which-key "Insert footnote")
-    "im"  '(yank-media :which-key "Insert media")
-
-;;;;; Tags/Properties
-    "p"   '(org-set-property :which-key "Set property")
-    "T"   '(org-set-tags-command :which-key "Set tags")
-
-;;;;; Export
     "e"   '(org-export-dispatch :which-key "Export")
-    "E"   '((lambda () (interactive) (org-export-dispatch '(4))) :which-key "Export Subtree")
 
-;;;;; Babel
-    "b"   '(:ignore t :which-key "tables/babel")
+;;;;;; Insert (i) - Used heavily
+    "i"   '(:ignore t :which-key "insert")
+    "ii"  '(org-insert-structure-template :which-key "Template/block")
+    "ih"  '(org-insert-heading :which-key "Heading")
+    "is"  '(org-insert-subheading :which-key "Subheading")
+    "it"  '(org-toggle-heading :which-key "Toggle heading")
+    "im"  '(yank-media :which-key "Paste media")
+
+;;;;;; Checkboxes (x) - Cleaned up from 'b'
+    "x"   '(:ignore t :which-key "checkbox")
+    "xx"  '(my/org-checkbox-checked :which-key "Check [X]")
+    "xo"  '(my/org-checkbox-open :which-key "Open [ ]")
+    "xc"  '(my/org-checkbox-cancelled :which-key "Cancel [-]")
+    "xt"  '(org-toggle-checkbox :which-key "Toggle checkbox")
+
+;;;;;; Tables (T) - Isolated from Babel
+    "T"   '(:ignore t :which-key "tables")
+    "T-"  '(org-table-insert-hline :which-key "Insert hline")
+    "Ta"  '(org-table-align :which-key "Align table")
+    "Tr"  '(org-table-insert-row :which-key "Insert row")
+    "Tc"  '(org-table-insert-column :which-key "Insert column")
+    "Tdc" '(org-table-delete-column :which-key "Delete column")
+
+;;;;;; Babel / Code Blocks (b)
+    "b"   '(:ignore t :which-key "babel")
     "bb"  '(org-babel-execute-src-block :which-key "Execute block")
-    "be"  '(org-edit-src-code :which-key "Edit src block")
     "bt"  '(org-babel-tangle :which-key "Tangle")
 
-;;;;; Priority
-    "P"   '(org-priority :which-key "Set priority")
-
-;;;;;; Tables
-    "b-"   '(org-table-insert-hline :which-key "Insert hline")
-    "bi"   '(:ignore t :which-key "table insert")
-    ;; "bir"  '(org-table-insert-row :which-key "Insert row")
-    ;; "bic"  '(org-table-insert-column :which-key "Insert column")
-    "bdc"  '(org-table-delete-column :which-key "Delete column")
-    "ba"   '(org-table-align :which-key "Align table")
-    "bs"   '(org-table-sort-lines :which-key "Sort rows")
-    "bf"   '(org-table-edit-formulas :which-key "Edit formulas")
-
-;;;;; Checkbox
-    "bc"   '(my/org-checkbox-checked :which-key "Check [X]")
-    "bx"   '(my/org-checkbox-cancelled :which-key "Cancel [-]")
-    "bo"   '(my/org-checkbox-open :which-key "Open [ ]")
-
-;;;;; Misc
-    "v"   '(org-toggle-inline-images :which-key "Toggle inline images")
-    "'"   '(org-edit-src-code :which-key "Edit src block")
-    "RET" '(org-open-at-point :which-key "Follow link")))
+;;;;;; Dates & Deadlines (d)
+    "d"   '(:ignore t :which-key "dates")
+    "dd"  '(org-deadline :which-key "Deadline")
+    "ds"  '(org-schedule :which-key "Schedule")
+    "dt"  '(org-time-stamp :which-key "Timestamp")
+    ))
 
 ;;; org mode
 (use-package org
@@ -1247,39 +1204,6 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
   :config
   (require 'consult)
 
-  (defun my/consult-recursive-file ()
-    "Recursively find a file below `default-directory'."
-    (interactive)
-    (if (executable-find "fd")
-        (consult-fd default-directory)
-      (consult-find default-directory)))
-
-  ;; Custom perspective source for consult-buffer (ignoring *star* buffers)
-  (setq my/consult--source-perspective
-        (list :name     "Workspace Buffers"
-              :narrow   ?w
-              :history  'buffer-name-history
-              :category 'buffer
-              :state    #'consult--buffer-state
-              :default  t
-              :items    (lambda ()
-                          (consult--buffer-query
-                           :predicate
-                           (lambda (buf)
-                             (let ((name (buffer-name buf)))
-                               (and ;; Ignore buffers with * (special buffers) and space (internal buffers)
-                                (not (string-match-p "\\`\\*.*\\*\\'" name))
-                                (not (string-prefix-p " " name))
-                                ;; Ensure buffer belongs to current perspective
-                                (if (bound-and-true-p persp-mode)
-                                    (member (if (bufferp buf) buf (get-buffer buf))
-                                            (if (fboundp 'persp-current-buffers)
-                                                (persp-current-buffers)
-                                              (persp-buffer-list)))
-                                  t))))
-                           :sort 'visibility
-                           :as #'buffer-name))))
-
   ;; Safely assemble available sources without void-variable errors
   (defun my/consult-workspace-buffer ()
     "Switch to a buffer in the active workspace."
@@ -1345,6 +1269,11 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
                      magit-revision-mode-map))
     (define-key map (kbd "SPC") nil))
   (evil-define-key '(normal visual motion) magit-mode-map (kbd "SPC") nil)
+  (evil-define-key '(normal visual) 'global
+    (kbd "C-d") (lambda () (interactive) (evil-scroll-down 0) (evil-scroll-line-to-center nil))
+    (kbd "C-u") (lambda () (interactive) (evil-scroll-up 0)   (evil-scroll-line-to-center nil)))
+  (evil-define-key '(normal visual) 'global "s" #'avy-goto-char-timer)
+  (evil-define-key 'normal 'global (kbd "C-s") #'save-buffer)
   (general-def :states 'normal :keymaps 'magit-mode-map
     "q" #'magit-mode-bury-buffer)
   (with-eval-after-load 'git-commit
@@ -1463,7 +1392,7 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
                               f))))))
   (setq eglot-ignored-server-capabilities 
         '(:semanticTokensProvider 
-          :workspace/didChangeConfiguration))
+          :workspace/didChangeConfiguration)))
 
 ;;;; clangd
   (with-eval-after-load 'eglot
@@ -1484,7 +1413,7 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
     :custom
     (corfu-auto t)
     (corfu-auto-delay 0.0)
-    (corfu-auto-prefix 2)
+    (corfu-auto-prefix 1)
     :config
     (defun my/corfu-enable-in-minibuffer ()
       "Enable Corfu in the minibuffer if completion is supported."
@@ -1675,28 +1604,19 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
 
 ;;;; custom
   (custom-set-variables
-   ;; custom-set-variables was added by Custom.
-   ;; If you edit it by hand, you could mess it up, so be careful.
-   ;; Your init file should contain only one such instance.
-   ;; If there is more than one, they won't work right.
    '(auth-source-save-behavior nil)
    '(custom-safe-themes
      '("c4df9006b9eb32599d758800a32f3487c2cdf13826084511783b47d419024af2"
        default))
    '(package-selected-packages
-     '(avy catppuccin-theme centered-cursor-mode consult corfu diff-hl
-           evil-collection evil-goggles evil-mc evil-nerd-commenter
-           evil-org evil-surround flyspell-correct gcmh general git-link
-           imenu-list indent-bars keyfreq magit marginalia markdown-mode
-           minimap mood-line no-littering orderless org-modern origami
-           ox-gfm ox-typst perspective powerline projectile
-           rainbow-delimiters rg sublimity tabspaces tldr typst-preview
-           typst-ts-mode vertico vterm websocket yafolding))
+     '(catppuccin-theme centered-cursor-mode consult corfu diff-hl
+                        evil evil-collection evil-goggles evil-nerd-commenter evil-org
+                        evil-surround gcmh general indent-bars keyfreq magit marginalia
+                        markdown-mode no-littering orderless org-modern ox-gfm perspective
+                        powerline projectile rainbow-delimiters typst-preview
+                        typst-ts-mode vertico websocket wgrep which-key yafolding))
    '(safe-local-variable-values
      '((eval add-hook 'after-save-hook #'org-gfm-export-to-markdown nil t))))
+
   (custom-set-faces
-   ;; custom-set-faces was added by Custom.
-   ;; If you edit it by hand, you could mess it up, so be careful.
-   ;; Your init file should contain only one such instance.
-   ;; If there is more than one, they won't work right.
    '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
