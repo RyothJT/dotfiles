@@ -352,6 +352,7 @@
 ;;;; evil package
 (use-package evil
   :defines (evil-normal-state-map
+            evil-insert-state-map
             evil-visual-state-map
             evil-inner-text-objects-map
             evil-outer-text-objects-map)
@@ -372,6 +373,7 @@
   (define-key evil-outer-text-objects-map "w" #'evil-a-symbol)
   (global-set-key (kbd "C-=") #'global-text-scale-adjust)
   (global-set-key (kbd "C--") #'global-text-scale-adjust)
+  (define-key evil-insert-state-map (kbd "C-y") 'yank)
   (with-eval-after-load 'dired
     (evil-define-key 'normal dired-mode-map (kbd "N") 'dired-create-empty-file))
   (evil-define-key 'normal 'global
