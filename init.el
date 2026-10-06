@@ -1,12 +1,5 @@
 ;; init.el --- Emacs configuration -*- lexical-binding: t; -*-
 ;;; core
-;;;; garbage collection
-(setq gc-cons-threshold (* 100 1024 1024)) ; 100 MB
-;; Reset it to a reasonable background level after startup completes
-(add-hook 'emacs-startup-hook
-          (lambda ()
-            (setq gc-cons-threshold (* 8 1024 1024)))) ; 8 MB
-
 ;;;; package setup
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
@@ -16,9 +9,16 @@
 (unless package-archive-contents
   (package-refresh-contents))
 
+;;;; gcmh - more garbage collection
+(use-package gcmh
+  :defines (gcmh-high-cons-threshold)
+  :functions (gcmh-mode)
+  :config
+  (setq gcmh-high-cons-threshold (* 64 1024 1024))
+  (gcmh-mode 1))
+
 ;;;; no-littering (redirects backups, autosaves, and caches)
 (use-package no-littering
-  :ensure t
   :config
   (require 'no-littering)
   ;; Disable lockfiles (.#filename)
@@ -35,6 +35,7 @@
   ;; Redirect auto-save files (#filename#) to ~/.emacs.d/var/auto-save/
   (setq auto-save-file-name-transforms
         `((".*" ,(no-littering-expand-var-file-name "auto-save/") t))))
+
 ;;;; identity
 (setq user-full-name "Justin Troth"
       user-mail-address "justin.troth@gd-ms.com")
@@ -44,6 +45,13 @@
 (setq-default tab-width 2)
 
 ;;; ui
+;;;; catppuccin Theme
+(use-package catppuccin-theme
+  :custom
+  (catppuccin-flavor 'macchiato)
+  :config
+  (load-theme 'catppuccin t))
+
 ;;;; menus and layout
 (menu-bar-mode -1)
 (tool-bar-mode -1)
@@ -54,13 +62,6 @@
 (add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
 (setq display-fill-column-indicator-column 80)
 (setq sentence-end-double-space nil)
-
-;; Ensure buffer-local variables are applied properly when entering programming modes
-(add-hook 'prog-mode-hook
-          (lambda ()
-            (setq indent-tabs-mode nil)
-            (setq display-fill-column-indicator-column 80)
-            (display-fill-column-indicator-mode 1)))
 
 ;;;; Window size at launch
 (setq initial-frame-alist '((width . 180) (height . 41)))
@@ -88,12 +89,14 @@
 (defvar-local my/buffer-last-edit-time nil
   "Timestamp of the most recent edit to this buffer.")
 
-(defun my/record-buffer-edit (&rest _)
+(defun my/record-buffer-edit ()
   "Record timestamp when a buffer is modified or opened."
   (setq my/buffer-last-edit-time (float-time)))
 
-(add-hook 'after-change-functions #'my/record-buffer-edit)
-(add-hook 'find-file-hook #'my/record-buffer-edit)
+;; Track edits on first modification, save, or file visit (zero per-keystroke overhead)
+(add-hook 'first-change-hook #'my/record-buffer-edit)
+(add-hook 'after-save-hook   #'my/record-buffer-edit)
+(add-hook 'find-file-hook    #'my/record-buffer-edit)
 
 (defun my/buffer-edit-time (buf)
   "Return timestamp of last edit for BUF (or disk modtime, or 0.0)."
@@ -164,26 +167,18 @@
 ;; Fallback for unicode characters
 (set-fontset-font t 'unicode "Noto Sans" nil 'append)
 
-;;;; arrow replacement via post-insert hook
-(defvar my/arrow-replacements
-  '(("-->"  . #x2192)
-    ("<--"  . #x2190)
-    ("==>"  . #x21D2)
-    ("<=="  . #x21D0)
-    ("<=>"  . #x27FA)
-    ("->>"  . #x21A0)
-    ("<<-"  . #x219E)
-    ("..."  . #x2026)))
+;;;; visual arrow replacement (non-destructive)
+(setq-default prettify-symbols-alist
+              '(("-->" . ?→)
+                ("<--" . ?←)
+                ("==>" . ?⇒)
+                ("<==" . ?⇐)
+                ("<=>" . ?⇔)
+                ("->>" . ?↠)
+                ("<<-" . ?↞)
+                ("..." . ?…)))
 
-(defun my/replace-arrows ()
-  "Replace arrow sequences with Unicode characters."
-  (dolist (pair my/arrow-replacements)
-    (let ((arrow (car pair))
-          (char (cdr pair)))
-      (when (looking-back (regexp-quote arrow) (- (point) (length arrow)))
-        (delete-char (- (length arrow)))
-        (insert (string char))))))
-(add-hook 'post-self-insert-hook #'my/replace-arrows)
+(global-prettify-symbols-mode 1)
 
 ;;;; outline
 ;;;; outline mode
@@ -233,22 +228,8 @@
                (slot . 3)
                (window-height . 0.2)))
 
-;;;; catppuccin Theme
-(use-package catppuccin-theme
-  :custom
-  (catppuccin-flavor 'macchiato)
-  :config
-  (load-theme 'catppuccin t)
-
-  ;; Elevated background pill with bright text
-  (set-face-attribute 'org-table nil
-                      :foreground (catppuccin-get-color 'lavender)
-                      :background (catppuccin-get-color 'surface0)
-                      :weight 'normal))
-
 ;;;; image size
 (setq org-image-actual-width '(100))
-(setq org-image-actual-width nil)
 (setq image-responsive-width t)
 (setq auto-window-vscroll nil)
 (setq image-scaling-factor 'auto)
@@ -577,6 +558,75 @@ With a prefix ARG, prompts for a session name."
     (goto-char (point-min))
     (message "Replaced buffer contents with clipboard.")))
 
+(defun my/format-buffer ()
+  "Universal format command.
+Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
+  (interactive)
+  (cond
+   ;; 1. Typst: ALWAYS use typstyle directly (Tinymist/Eglot returns empty edits)
+   ((derived-mode-p 'typst-ts-mode)
+    (if (executable-find "typstyle")
+        (let ((p (point))
+              (temp-buffer (generate-new-buffer " *typstyle-temp*")))
+          (unwind-protect
+              (let ((exit-code (call-process-region (point-min) (point-max) "typstyle" nil temp-buffer nil)))
+                (if (zerop exit-code)
+                    (let ((formatted-text (with-current-buffer temp-buffer (buffer-string))))
+                      ;; Only replace buffer if there is actual content
+                      (unless (string-empty-p formatted-text)
+                        (erase-buffer)
+                        (insert formatted-text)
+                        (goto-char (min p (point-max)))
+                        (message "Formatted Typst buffer with typstyle.")))
+                  (message "typstyle error: syntax error in file, buffer unchanged.")))
+            (kill-buffer temp-buffer)))
+      (user-error "typstyle binary not found in PATH!")))
+
+   ;; 2. Tcl & XDC (preserves backslashes and constraints)
+   ((derived-mode-p 'tcl-mode)
+    (if (executable-find "tcl-format")
+        (let ((p (point)))
+          (shell-command-on-region (point-min) (point-max) "tcl-format -" nil t)
+          (goto-char (min p (point-max)))
+          (message "Formatted Tcl with tcl-format."))
+      (save-excursion (indent-region (point-min) (point-max)))
+      (message "Re-indented Tcl/XDC buffer.")))
+
+   ;; 3. Org Mode: Align tables and indent
+   ((derived-mode-p 'org-mode)
+    (save-excursion
+      (org-table-map-tables #'org-table-align t)
+      (indent-region (point-min) (point-max)))
+    (message "Formatted Org buffer (aligned tables & indented)."))
+
+   ;; 4. Emacs Lisp: Clean indentation
+   ((derived-mode-p 'emacs-lisp-mode)
+    (save-excursion
+      (indent-region (point-min) (point-max)))
+    (message "Indented Emacs Lisp buffer."))
+
+   ;; 5. Active Eglot LSP (C, C++, Verilog/SystemVerilog)
+   ((and (bound-and-true-p eglot--managed-mode)
+         (fboundp 'eglot-format))
+    (call-interactively #'eglot-format)
+    (message "Formatted via active Eglot server."))
+
+   ;; 6. C/C++ fallback (if Eglot is offline)
+   ((derived-mode-p 'c-mode 'c++-mode 'c-ts-mode 'c++-ts-mode 'c-or-c++-mode)
+    (if (executable-find "clang-format")
+        (let ((p (point)))
+          (shell-command-on-region (point-min) (point-max) "clang-format" nil t)
+          (goto-char (min p (point-max)))
+          (message "Formatted C/C++ with clang-format."))
+      (save-excursion (indent-region (point-min) (point-max)))
+      (message "Re-indented C/C++ buffer.")))
+
+   ;; 7. General Fallback
+   (t
+    (save-excursion
+      (indent-region (point-min) (point-max)))
+    (message "Indented buffer."))))
+
 ;;; general.el (leader key)
 (use-package general
   :defines (doom-leader-keys
@@ -703,7 +753,7 @@ With a prefix ARG, prompts for a session name."
     "l"   '(:ignore t :which-key "lsp")
     "ll"  '(eglot :which-key "Start LSP")
     "lr"  '(eglot-rename :which-key "Rename symbol")
-    "lf"  '(eglot-format :which-key "Format buffer")
+    "lf"  '(my/format-buffer :which-key "Format buffer")
     "la"  '(eglot-code-actions :which-key "Code actions")
     "lq"  '(eglot-shutdown :which-key "Stop LSP")
     "ld"  '(flymake-show-buffer-diagnostics :which-key "Show diagnostics")
@@ -804,7 +854,6 @@ With a prefix ARG, prompts for a session name."
     "ba"   '(org-table-align :which-key "Align table")
     "bs"   '(org-table-sort-lines :which-key "Sort rows")
     "bf"   '(org-table-edit-formulas :which-key "Edit formulas")
-    "be"   '(org-table-eval-formulas :which-key "Eval formulas")
 
 ;;;;; Checkbox
     "bc"   '(my/org-checkbox-checked :which-key "Check [X]")
@@ -971,7 +1020,12 @@ With a prefix ARG, prompts for a session name."
   (set-face-attribute 'org-level-3 nil :height 1.2 :weight 'bold)
   (set-face-attribute 'org-level-4 nil :height 1.1)
   (set-face-attribute 'org-level-5 nil :height 1.0)
-  (set-face-attribute 'org-document-title nil :height 1.6 :weight 'bold))
+  (set-face-attribute 'org-document-title nil :height 1.6 :weight 'bold)
+  ;; Elevated background pill with bright text
+  (set-face-attribute 'org-table nil
+                      :foreground (catppuccin-get-color 'lavender)
+                      :background (catppuccin-get-color 'surface0)
+                      :weight 'normal))
 
 (use-package ox
   :ensure nil
@@ -995,7 +1049,6 @@ With a prefix ARG, prompts for a session name."
   (org-modern-checkbox '((?  . "☐") (?X . "☑") (?- . "◫")))
   (org-modern-table nil)                      ; <-- Completely disable org-modern's table styling
   (org-modern-block-name t)
-  (org-modern-label ((t (:height 0.9 :weight bold :inherit nil))))
   (org-modern-todo-faces
    '(("TODO"        . (:background "GoldenRod"  :foreground "black" :weight bold))
      ("PLANNING"    . (:background "DeepPink"   :foreground "white" :weight bold))
@@ -1004,7 +1057,9 @@ With a prefix ARG, prompts for a session name."
      ("BLOCKED"     . (:background "Red"        :foreground "white" :weight bold))
      ("DONE"        . (:background "LimeGreen"  :foreground "black" :weight bold))
      ("OBE"         . (:background "LimeGreen"  :foreground "black" :weight bold))
-     ("WONT-DO"     . (:background "LimeGreen"  :foreground "black" :weight bold)))))
+     ("WONT-DO"     . (:background "LimeGreen"  :foreground "black" :weight bold))))
+  :custom-face
+  (org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
 
 ;;;; org special export without html links
 (use-package ox-gfm
@@ -1375,21 +1430,14 @@ With a prefix ARG, prompts for a session name."
   (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup)
   (add-hook 'verilog-mode-hook #'my/verilog-indent-bars-setup))
 
-;;;; apheleia (direct formatting via typstyle)
-(use-package apheleia
-  :ensure t
-  :config
-  ;; Define typstyle as a formatter
-  (add-to-list 'apheleia-formatters '(typstyle "typstyle" "-i" filepath))
-  ;; Assign typstyle to typst-ts-mode
-  (add-to-list 'apheleia-mode-alist '(typst-ts-mode . typstyle))
-  ;; Enable apheleia globally (formats on save automatically)
-  (apheleia-global-mode +1))
-
-;;;; eglot + typst + verilog
+;;;; eglot + typst + verilog + c/c++
 (use-package eglot
   :hook ((verilog-mode . eglot-ensure)
-         (typst-ts-mode . eglot-ensure))
+         (typst-ts-mode . eglot-ensure)
+         (c-mode        . eglot-ensure)
+         (c++-mode      . eglot-ensure)
+         (c-ts-mode     . eglot-ensure)
+         (c++-ts-mode   . eglot-ensure))
   :config
   ;; Tinymist language server for Typst
   (add-to-list 'eglot-server-programs
@@ -1413,39 +1461,38 @@ With a prefix ARG, prompts for a session name."
                                                    (directory-files-recursively root "\\.s?v$")
                                                    "\n")))
                               f))))))
-  (setq eglot-ignored-server-capabilities '(:semanticTokensProvider)))
+  (setq eglot-ignored-server-capabilities 
+        '(:semanticTokensProvider 
+          :workspace/didChangeConfiguration))
 
 ;;;; clangd
-(with-eval-after-load 'eglot
-  (add-to-list 'eglot-server-programs
-               `((c-mode c++-mode c-or-c++-mode)
-                 . ("clangd"
-                    "--compile-commands-dir=build"
-                    "--background-index"
-                    "--inlay-hints=true"))))
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 `((c-mode c++-mode c-or-c++-mode)
+                   . ("clangd"
+                      "--compile-commands-dir=build"
+                      "--background-index"
+                      "--inlay-hints=true"))))
 
-(add-hook 'c-mode-hook #'eglot-inlay-hints-mode)
-(add-hook 'c++-mode-hook #'eglot-inlay-hints-mode)
+  (add-hook 'c-mode-hook #'eglot-inlay-hints-mode)
+  (add-hook 'c++-mode-hook #'eglot-inlay-hints-mode)
 
 ;;;; corfu
-(use-package corfu
-  :ensure t
-  :init
-  (global-corfu-mode)
-  :custom
-  (corfu-auto t)                 ; Enable auto-popup
-  (corfu-auto-delay 0.0)         ; Popup delay (seconds)
-  (corfu-auto-prefix 1)          ; Minimum characters before trigger globally
-
-  ;; Allow Corfu in the minibuffer (e.g., for M-x compile)
-  (defun my/corfu-enable-in-minibuffer ()
-    "Enable Corfu in the minibuffer if completion is supported."
-    (unless (bound-and-true-p mct-mode)
-      (setq-local corfu-echo-delay nil
-                  corfu-popupinfo-delay nil)
-      (corfu-mode 1)))
-
-  (add-hook 'minibuffer-setup-hook #'my/corfu-enable-in-minibuffer)
+  (use-package corfu
+    :init
+    (global-corfu-mode)
+    :custom
+    (corfu-auto t)
+    (corfu-auto-delay 0.0)
+    (corfu-auto-prefix 2)
+    :config
+    (defun my/corfu-enable-in-minibuffer ()
+      "Enable Corfu in the minibuffer if completion is supported."
+      (unless (bound-and-true-p mct-mode)
+        (setq-local corfu-echo-delay nil
+                    corfu-popupinfo-delay nil)
+        (corfu-mode 1)))
+    (add-hook 'minibuffer-setup-hook #'my/corfu-enable-in-minibuffer))
 
 ;;;; powerline
   (use-package powerline
@@ -1551,15 +1598,6 @@ With a prefix ARG, prompts for a session name."
       (evil-define-key 'normal yafolding-mode-map
         (kbd "TAB") #'yafolding-toggle-element)))
 
-;;;; gcmh - more garbage collection
-  (use-package gcmh
-    :defines (gcmh-high-cons-threshold)
-    :functions (gcmh-mode)
-    :ensure t
-    :config
-    (setq gcmh-high-cons-threshold (* 64 1024 1024))
-    (gcmh-mode 1))
-
 ;;;; typst
   (use-package treesit
     :ensure nil
@@ -1616,7 +1654,6 @@ With a prefix ARG, prompts for a session name."
 
 ;;;; markdown mode
   (use-package markdown-mode
-    :ensure t
     :mode ("\\.md\\'" . gfm-mode)
     :init
     ;; Use gfm-mode (GitHub Flavored Markdown) for previewing and code block features
@@ -1654,7 +1691,7 @@ With a prefix ARG, prompts for a session name."
            minimap mood-line no-littering orderless org-modern origami
            ox-gfm ox-typst perspective powerline projectile
            rainbow-delimiters rg sublimity tabspaces tldr typst-preview
-           vertico vterm websocket yafolding))
+           typst-ts-mode vertico vterm websocket yafolding))
    '(safe-local-variable-values
      '((eval add-hook 'after-save-hook #'org-gfm-export-to-markdown nil t))))
   (custom-set-faces
