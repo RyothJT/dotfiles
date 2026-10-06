@@ -158,8 +158,8 @@
 
 ;;;; font
 (set-face-attribute 'default nil
-  :font "JetBrains Mono"
-  :height 100)
+                    :font "JetBrains Mono"
+                    :height 100)
 
 ;; Fallback for unicode characters
 (set-fontset-font t 'unicode "Noto Sans" nil 'append)
@@ -197,7 +197,7 @@
                              (setq-local outline-regexp ";;;+")
                              (outline-minor-mode 1)
                              (font-lock-add-keywords nil
-                               '(("^;;;+.*$" 0 'my/outline-header-face prepend)))))
+                                                     '(("^;;;+.*$" 0 'my/outline-header-face prepend)))))
   :config
   (with-eval-after-load 'evil
     (evil-define-key 'normal outline-minor-mode-map
@@ -206,32 +206,32 @@
 
 ;;;; popup bottom windows (Doom-style)
 (add-to-list 'display-buffer-alist
-  '("\\*scratch\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 0)
-    (window-height . 0.2)))
+             '("\\*scratch\\*"
+               (display-buffer-in-side-window)
+               (side . bottom)
+               (slot . 0)
+               (window-height . 0.2)))
 
 (add-to-list 'display-buffer-alist
-  '("\\*Async Shell Command\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 1)
-    (window-height . 0.2)))
+             '("\\*Async Shell Command\\*"
+               (display-buffer-in-side-window)
+               (side . bottom)
+               (slot . 1)
+               (window-height . 0.2)))
 
 (add-to-list 'display-buffer-alist
-  '("\\*eshell\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 2)
-    (window-height . 0.2)))
+             '("\\*eshell\\*"
+               (display-buffer-in-side-window)
+               (side . bottom)
+               (slot . 2)
+               (window-height . 0.2)))
 
 (add-to-list 'display-buffer-alist
-  '("\\*terminal\\*"
-    (display-buffer-in-side-window)
-    (side . bottom)
-    (slot . 3)
-    (window-height . 0.2)))
+             '("\\*terminal\\*"
+               (display-buffer-in-side-window)
+               (side . bottom)
+               (slot . 3)
+               (window-height . 0.2)))
 
 ;;;; catppuccin Theme
 (use-package catppuccin-theme
@@ -538,9 +538,9 @@ With a prefix ARG, prompts for a session name."
   "Find and open the user's Emacs initialization file."
   (interactive)
   (if-let ((config-file (seq-find #'file-exists-p
-                                 '("~/.emacs.d/init.el"
-                                   "~/.config/emacs/init.el"
-                                   "~/.emacs"))))
+                                  '("~/.emacs.d/init.el"
+                                    "~/.config/emacs/init.el"
+                                    "~/.emacs"))))
       (find-file config-file)
     (message "No Emacs configuration file found!")))
 
@@ -561,8 +561,8 @@ With a prefix ARG, prompts for a session name."
         (with-temp-buffer
           (insert file-uri "\n")
           (call-process-region (point-min) (point-max)
-                              "wl-copy" nil nil nil
-                              "--type" "text/uri-list"))
+                               "wl-copy" nil nil nil
+                               "--type" "text/uri-list"))
         (message "Copied file to clipboard: %s" path))
     (message "Buffer is not visiting a file!")))
 
@@ -583,9 +583,9 @@ With a prefix ARG, prompts for a session name."
              doom-local-leader-keys
              general-override-mode-map)
   :functions (general-create-definer
-              doom-leader-keys
-              doom-local-leader-keys
-              general-def)
+               doom-leader-keys
+               doom-local-leader-keys
+               general-def)
   :config
   ;; Main leader
   (general-create-definer doom-leader-keys
@@ -687,8 +687,8 @@ With a prefix ARG, prompts for a session name."
 
 ;;;;; Code
     "c"   '(:ignore t :which-key "code")
-    "cc"  '(compile :which-key "Compile")
-    "cC"  '(recompile :which-key "Recompile")
+    "cc"  '(project-compile :which-key "Compile")
+    "cC"  '(project-recompile :which-key "Recompile")
     "ck"  '(kill-compilation :which-key "Kill compilation")
     "cw"  '(delete-trailing-whitespace :which-key "Delete whitespace")
     "cr"  '(xref-find-references :which-key "Find references")
@@ -897,7 +897,7 @@ With a prefix ARG, prompts for a session name."
 
   :hook (find-file . my/auto-insert-org-template)
   :bind (:map org-mode-map
-         ("DEL" . my/org-smart-backspace))
+              ("DEL" . my/org-smart-backspace))
   :custom
   (org-directory "~/org")
   (org-hide-leading-stars t)
@@ -907,6 +907,8 @@ With a prefix ARG, prompts for a session name."
   (org-hide-emphasis-markers t)
   (org-pretty-entities t)
   (org-use-sub-superscripts '{})
+  (org-cycle-level-after-item/entry-creation nil)
+  (org-cycle-emulate-tab nil)
 
   (org-agenda-files '("~/org/todo.org"
                       "~/org/meetings"
@@ -1011,11 +1013,11 @@ With a prefix ARG, prompts for a session name."
             org-export-with-clocks
             org-export-filter-final-output-functions)
   :functions (org-element-map
-              org-element-parse-buffer
-              org-element-property
-              org-element--property
-              org-parse-time-string
-              my/ox-gfm-fix-links)
+                 org-element-parse-buffer
+                 org-element-property
+               org-element--property
+               org-parse-time-string
+               my/ox-gfm-fix-links)
   :init
   (require 'org-element)
   :config
@@ -1211,15 +1213,15 @@ With a prefix ARG, prompts for a session name."
                            (lambda (buf)
                              (let ((name (buffer-name buf)))
                                (and ;; Ignore buffers with * (special buffers) and space (internal buffers)
-                                    (not (string-match-p "\\`\\*.*\\*\\'" name))
-                                    (not (string-prefix-p " " name))
-                                    ;; Ensure buffer belongs to current perspective
-                                    (if (bound-and-true-p persp-mode)
-                                        (member (if (bufferp buf) buf (get-buffer buf))
-                                                (if (fboundp 'persp-current-buffers)
-                                                    (persp-current-buffers)
-                                                  (persp-buffer-list)))
-                                      t))))
+                                (not (string-match-p "\\`\\*.*\\*\\'" name))
+                                (not (string-prefix-p " " name))
+                                ;; Ensure buffer belongs to current perspective
+                                (if (bound-and-true-p persp-mode)
+                                    (member (if (bufferp buf) buf (get-buffer buf))
+                                            (if (fboundp 'persp-current-buffers)
+                                                (persp-current-buffers)
+                                              (persp-buffer-list)))
+                                  t))))
                            :sort 'visibility
                            :as #'buffer-name))))
 
@@ -1269,7 +1271,7 @@ With a prefix ARG, prompts for a session name."
 
   (defun my/magit-hide-cursor ()
     (setq-local evil-normal-state-cursor '(nil)
-      evil-motion-state-cursor '(nil)))
+                evil-motion-state-cursor '(nil)))
   (add-hook 'magit-mode-hook #'my/magit-hide-cursor)
 
   ;; Magit's conflict resolver replaces Ediff's normal quit hook.  Restore its
@@ -1360,9 +1362,9 @@ With a prefix ARG, prompts for a session name."
 
   (defun my/verilog-font-lock-setup ()
     (font-lock-add-keywords nil
-      '(("\\b\\([A-Z][A-Z0-9_]+\\)\\b" 1 'verilog-parameter-face)
-        ("\\b\\([0-9]+\\('[bdh][0-9a-fA-FxXzZ_]+\\)?\\)\\b" 1 'verilog-number-face))
-      'append)) ; Use 'append so syntactic comment/string faces take precedence
+                            '(("\\b\\([A-Z][A-Z0-9_]+\\)\\b" 1 'verilog-parameter-face)
+                              ("\\b\\([0-9]+\\('[bdh][0-9a-fA-FxXzZ_]+\\)?\\)\\b" 1 'verilog-number-face))
+                            'append)) ; Use 'append so syntactic comment/string faces take precedence
 
   (defun my/verilog-indent-bars-setup ()
     (setq-local indent-bars-spacing-override 2)
@@ -1446,210 +1448,218 @@ With a prefix ARG, prompts for a session name."
   (add-hook 'minibuffer-setup-hook #'my/corfu-enable-in-minibuffer)
 
 ;;;; powerline
-(use-package powerline
-  :defines (projectile-mode-line-prefix
-            projectile-mode-line-function
-            powerline-height
-            powerline-default-separator)
-  :functions (powerline-center-evil-theme
-              powerline-reset
-              projectile-project-name
-              catppuccin-get-color)
-  :preface
-  (defun my/update-powerline-height ()
-    "Set powerline height based on actual rendered font pixel height."
-    (let* ((info (font-info (face-font 'default)))
-           (pixel-height (+ (aref info 2) (aref info 3)))  ; ascent + descent
-           (padding 0))
-      (setq powerline-height (+ pixel-height padding))
-      (powerline-reset)))
-  :custom
-  (projectile-mode-line-prefix " ")
-  :config
-  (setq powerline-default-separator 'bar)
-  (my/update-powerline-height)
-  (add-hook 'after-make-frame-functions
-            (lambda (_) (my/update-powerline-height)))
-  (powerline-center-evil-theme)
-  (setq projectile-mode-line-function
-        (lambda ()
-          (format " [%s]" (projectile-project-name))))
-  (set-face-attribute 'mode-line nil :height 1.0)
-  (set-face-attribute 'mode-line-inactive nil :height 1.0)
-  (let ((bar-color (catppuccin-get-color 'pink))
-        (dark-fg    (catppuccin-get-color 'crust)))
-    (set-face-attribute 'powerline-active0 nil
-                        :background bar-color
-                        :foreground dark-fg)))
+  (use-package powerline
+    :defines (projectile-mode-line-prefix
+              projectile-mode-line-function
+              powerline-height
+              powerline-default-separator)
+    :functions (powerline-center-evil-theme
+                powerline-reset
+                projectile-project-name
+                catppuccin-get-color)
+    :preface
+    (defun my/update-powerline-height ()
+      "Set powerline height based on actual rendered font pixel height."
+      (let* ((info (font-info (face-font 'default)))
+             (pixel-height (+ (aref info 2) (aref info 3)))  ; ascent + descent
+             (padding 0))
+        (setq powerline-height (+ pixel-height padding))
+        (powerline-reset)))
+    :custom
+    (projectile-mode-line-prefix " ")
+    :config
+    (setq powerline-default-separator 'bar)
+    (my/update-powerline-height)
+    (add-hook 'after-make-frame-functions
+              (lambda (_) (my/update-powerline-height)))
+    (powerline-center-evil-theme)
+    (setq projectile-mode-line-function
+          (lambda ()
+            (format " [%s]" (projectile-project-name))))
+    (set-face-attribute 'mode-line nil :height 1.0)
+    (set-face-attribute 'mode-line-inactive nil :height 1.0)
+    (let ((bar-color (catppuccin-get-color 'pink))
+          (dark-fg    (catppuccin-get-color 'crust)))
+      (set-face-attribute 'powerline-active0 nil
+                          :background bar-color
+                          :foreground dark-fg)))
 
 ;;;; rainbow delimiters
-(use-package rainbow-delimiters
-  :hook (prog-mode . rainbow-delimiters-mode))
+  (use-package rainbow-delimiters
+    :hook (prog-mode . rainbow-delimiters-mode))
 
 ;;;; indent-bars - Visual scope lines
-(use-package indent-bars
-  :functions (indent-bars-mode)
-  :hook (prog-mode . indent-bars-mode)
-  :custom
-  (indent-bars-treesitter-support t)
-  (indent-bars-no-descend-string t))
+  (use-package indent-bars
+    :functions (indent-bars-mode)
+    :hook (prog-mode . indent-bars-mode)
+    :custom
+    (indent-bars-treesitter-support t)
+    (indent-bars-no-descend-string t))
 
 ;;;; tldr
-(use-package tldr)
+  (use-package tldr)
 
 ;;;; ripgrep
-(use-package rg)
+  (use-package rg)
 
 ;;;; wgrep
-(use-package wgrep)
+  (use-package wgrep)
 
 ;;;; keyfreq
-(use-package keyfreq
-  :functions (keyfreq-mode keyfreq-autosave-mode)
-  :config
-  (keyfreq-mode 1)
-  (keyfreq-autosave-mode 1))
+  (use-package keyfreq
+    :functions (keyfreq-mode keyfreq-autosave-mode)
+    :config
+    (keyfreq-mode 1)
+    (keyfreq-autosave-mode 1))
 
 ;;;; yafolding
-(use-package yafolding
-  :defines (yafolding-ellipsis-content
-            yafolding-mode-map)
-  :functions (my/yafolding-pad-ellipsis
-              yafolding-toggle-element)
-  :hook ((prog-mode . yafolding-mode)
-         (emacs-lisp-mode . (lambda () (yafolding-mode -1))))
-  :config
-  (defun my/yafolding-pad-ellipsis (region)
-    "Pad `yafolding-ellipsis-content' to column 80 with line count prefix."
-    (when (and region (listp region) (numberp (car region)) (numberp (cadr region)))
-      (let* ((beg (car region))
-             (end (cadr region))
-             (lines-folded (count-lines beg end))
-             (line-len (- (line-end-position) (line-beginning-position)))
-             (target-col 80)
-             (prefix (format " [+%d lines]  " lines-folded))
-             (base-suffix "│")
-             ;; Only include the suffix if the line length + prefix + suffix fits within 80 characters
-             (suffix (if (<= (+ line-len (length prefix) (length base-suffix)) target-col)
-                         base-suffix
-                       ""))
-             (pad-count (max 0 (- target-col line-len (length prefix) (length suffix)))))
-        (setq yafolding-ellipsis-content
-              (concat prefix (make-string pad-count ?─) suffix))))
-    region)
+  (use-package yafolding
+    :defines (yafolding-ellipsis-content
+              yafolding-mode-map)
+    :functions (my/yafolding-pad-ellipsis
+                yafolding-toggle-element)
+    :hook ((prog-mode . yafolding-mode)
+           (emacs-lisp-mode . (lambda () (yafolding-mode -1))))
+    :config
+    (defun my/yafolding-pad-ellipsis (region)
+      "Pad `yafolding-ellipsis-content' to column 80 with line count prefix."
+      (when (and region (listp region) (numberp (car region)) (numberp (cadr region)))
+        (let* ((beg (car region))
+               (end (cadr region))
+               (lines-folded (count-lines beg end))
+               (line-len (- (line-end-position) (line-beginning-position)))
+               (target-col 80)
+               (prefix (format " [+%d lines]  " lines-folded))
+               (base-suffix "│")
+               ;; Only include the suffix if the line length + prefix + suffix fits within 80 characters
+               (suffix (if (<= (+ line-len (length prefix) (length base-suffix)) target-col)
+                           base-suffix
+                         ""))
+               (pad-count (max 0 (- target-col line-len (length prefix) (length suffix)))))
+          (setq yafolding-ellipsis-content
+                (concat prefix (make-string pad-count ?─) suffix))))
+      region)
 
-  (advice-add 'yafolding-get-element-region :filter-return #'my/yafolding-pad-ellipsis)
+    (advice-add 'yafolding-get-element-region :filter-return #'my/yafolding-pad-ellipsis)
 
-  (set-face-attribute 'yafolding-ellipsis-face nil
-                      :background (catppuccin-get-color 'base)
-                      :foreground (catppuccin-get-color 'peach)
-                      :weight 'bold)
+    (set-face-attribute 'yafolding-ellipsis-face nil
+                        :background (catppuccin-get-color 'base)
+                        :foreground (catppuccin-get-color 'peach)
+                        :weight 'bold)
 
-  (with-eval-after-load 'evil
-    (evil-define-key 'normal yafolding-mode-map
-      (kbd "TAB") #'yafolding-toggle-element)))
+    (with-eval-after-load 'evil
+      (evil-define-key 'normal yafolding-mode-map
+        (kbd "TAB") #'yafolding-toggle-element)))
 
 ;;;; gcmh - more garbage collection
-(use-package gcmh
-  :defines (gcmh-high-cons-threshold)
-  :functions (gcmh-mode)
-  :ensure t
-  :config
-  (setq gcmh-high-cons-threshold (* 64 1024 1024))
-  (gcmh-mode 1))
+  (use-package gcmh
+    :defines (gcmh-high-cons-threshold)
+    :functions (gcmh-mode)
+    :ensure t
+    :config
+    (setq gcmh-high-cons-threshold (* 64 1024 1024))
+    (gcmh-mode 1))
 
 ;;;; typst
-(use-package treesit
-  :ensure nil
-  :config
-  (add-to-list 'treesit-language-source-alist
-               '(typst "git@github.com:uben0/tree-sitter-typst.git")))
+  (use-package treesit
+    :ensure nil
+    :config
+    (add-to-list 'treesit-language-source-alist
+                 '(typst "git@github.com:uben0/tree-sitter-typst.git")))
 
-(use-package typst-ts-mode
-  :custom
-  ;; Automatically compile to PDF on save if desired
-  (typst-ts-mode-watch-options "--open")
-  :config
-  ;; Ensure .typ files automatically open in typst-ts-mode
-  (add-to-list 'auto-mode-alist '("\\.typ\\'" . typst-ts-mode)))
+  (use-package typst-ts-mode
+    :custom
+    (typst-ts-mode-watch-options "--open")
+    :hook
+    (typst-ts-mode . (lambda ()
+                       ;; Match lines starting with one or more '=' followed by whitespace
+                       (setq-local outline-regexp "=+\\s-")
+                       ;; Define where the heading level ends for proper outline parsing
+                       (setq-local outline-heading-end-regexp "\n")
+                       (outline-minor-mode 1)
+                       ;; Apply custom highlighting face to Typst headers
+                       (font-lock-add-keywords nil
+                                               '(("^=+\\s-.*$" 0 'my/outline-header-face prepend)))))
+    :config
+    (add-to-list 'auto-mode-alist '("\\.typ\\'" . typst-ts-mode)))
 
-(use-package websocket)
+  (use-package websocket)
 
-(use-package typst-preview
-  ;; :load-path "path/to/typst-preview.el" ;; if installed manually
-  :init
-  (setq typst-preview-autostart t) ; start preview automatically when typst-preview-mode is activated
-  (setq typst-preview-open-browser-automatically nil) ; open browser automatically when typst-preview-start is run
-  (setq typst-preview-host "127.0.0.1:6973")
+  (use-package typst-preview
+    ;; :load-path "path/to/typst-preview.el" ;; if installed manually
+    :init
+    (setq typst-preview-autostart t) ; start preview automatically when typst-preview-mode is activated
+    (setq typst-preview-open-browser-automatically nil) ; open browser automatically when typst-preview-start is run
+    (setq typst-preview-host "127.0.0.1:6973")
 
-  :custom
-  (typst-preview-browser "default") 	; this is the default option; other options are `eaf-browser' or `xwidget'.
-  (typst-preview-invert-colors "true")	; invert colors depending on system theme
-  (typst-preview-executable "tinymist") ; path to tinymist binary (relative or absolute)
-  (typst-preview-partial-rendering t)   ; enable partial rendering 
-  
-  :config
-  (define-key typst-preview-mode-map (kbd "C-c C-j") 'typst-preview-send-position))
+    :custom
+    (typst-preview-browser "default") 	; this is the default option; other options are `eaf-browser' or `xwidget'.
+    (typst-preview-invert-colors "true")	; invert colors depending on system theme
+    (typst-preview-executable "tinymist") ; path to tinymist binary (relative or absolute)
+    (typst-preview-partial-rendering t)   ; enable partial rendering 
+    
+    :config
+    (define-key typst-preview-mode-map (kbd "C-c C-j") 'typst-preview-send-position))
 
-(defun my/org-typst-preview-region (start end)
-  "Compile selection to SVG via Typst CLI and display inline."
-  (interactive "r")
-  (let* ((text (buffer-substring-no-properties start end))
-         (tmp-typ (make-temp-file "org-typst-" nil ".typ"))
-         (tmp-svg (make-temp-file "org-typst-" nil ".svg")))
-    (write-region (concat "$ " text " $") nil tmp-typ)
-    (if (zerop (call-process "typst" nil nil nil "compile" tmp-typ tmp-svg))
-        (let ((ov (make-overlay start end)))
-          (overlay-put ov 'display (create-image tmp-svg 'svg nil :ascent 'center))
-          (overlay-put ov 'evaporate t))
-      (message "Typst compilation failed."))))
+  (defun my/org-typst-preview-region (start end)
+    "Compile selection to SVG via Typst CLI and display inline."
+    (interactive "r")
+    (let* ((text (buffer-substring-no-properties start end))
+           (tmp-typ (make-temp-file "org-typst-" nil ".typ"))
+           (tmp-svg (make-temp-file "org-typst-" nil ".svg")))
+      (write-region (concat "$ " text " $") nil tmp-typ)
+      (if (zerop (call-process "typst" nil nil nil "compile" tmp-typ tmp-svg))
+          (let ((ov (make-overlay start end)))
+            (overlay-put ov 'display (create-image tmp-svg 'svg nil :ascent 'center))
+            (overlay-put ov 'evaporate t))
+        (message "Typst compilation failed."))))
 
 ;;;; markdown mode
-(use-package markdown-mode
-  :ensure t
-  :mode ("\\.md\\'" . gfm-mode)
-  :init
-  ;; Use gfm-mode (GitHub Flavored Markdown) for previewing and code block features
-  (setq markdown-command "multimarkdown")
-  :config
-  ;; Enable syntax highlighting inside code blocks in the main buffer
-  (setq markdown-fontify-code-blocks-natively t)
-  
-  ;; Map markdown language identifiers to Emacs major modes
-  (setq markdown-code-lang-modes
-        '(("elisp" . emacs-lisp-mode)
-          ("c++" . c++-mode)
-          ("cpp" . c++-mode)
-          ("py" . python-mode)
-          ("python" . python-mode)
-          ("json" . js-mode)
-          ("sh" . sh-mode)
-          ("bash" . sh-mode))))
+  (use-package markdown-mode
+    :ensure t
+    :mode ("\\.md\\'" . gfm-mode)
+    :init
+    ;; Use gfm-mode (GitHub Flavored Markdown) for previewing and code block features
+    (setq markdown-command "multimarkdown")
+    :config
+    ;; Enable syntax highlighting inside code blocks in the main buffer
+    (setq markdown-fontify-code-blocks-natively t)
+    
+    ;; Map markdown language identifiers to Emacs major modes
+    (setq markdown-code-lang-modes
+          '(("elisp" . emacs-lisp-mode)
+            ("c++" . c++-mode)
+            ("cpp" . c++-mode)
+            ("py" . python-mode)
+            ("python" . python-mode)
+            ("json" . js-mode)
+            ("sh" . sh-mode)
+            ("bash" . sh-mode))))
 
 ;;;; custom
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(auth-source-save-behavior nil)
- '(custom-safe-themes
-   '("c4df9006b9eb32599d758800a32f3487c2cdf13826084511783b47d419024af2"
-     default))
- '(package-selected-packages
-   '(avy catppuccin-theme centered-cursor-mode consult corfu diff-hl
-         evil-collection evil-goggles evil-mc evil-nerd-commenter
-         evil-org evil-surround flyspell-correct gcmh general git-link
-         imenu-list indent-bars keyfreq magit marginalia markdown-mode
-         minimap mood-line no-littering orderless org-modern origami
-         ox-gfm ox-typst perspective powerline projectile
-         rainbow-delimiters rg sublimity tabspaces tldr typst-preview
-         vertico vterm websocket yafolding))
- '(safe-local-variable-values
-   '((eval add-hook 'after-save-hook #'org-gfm-export-to-markdown nil t))))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
+  (custom-set-variables
+   ;; custom-set-variables was added by Custom.
+   ;; If you edit it by hand, you could mess it up, so be careful.
+   ;; Your init file should contain only one such instance.
+   ;; If there is more than one, they won't work right.
+   '(auth-source-save-behavior nil)
+   '(custom-safe-themes
+     '("c4df9006b9eb32599d758800a32f3487c2cdf13826084511783b47d419024af2"
+       default))
+   '(package-selected-packages
+     '(avy catppuccin-theme centered-cursor-mode consult corfu diff-hl
+           evil-collection evil-goggles evil-mc evil-nerd-commenter
+           evil-org evil-surround flyspell-correct gcmh general git-link
+           imenu-list indent-bars keyfreq magit marginalia markdown-mode
+           minimap mood-line no-littering orderless org-modern origami
+           ox-gfm ox-typst perspective powerline projectile
+           rainbow-delimiters rg sublimity tabspaces tldr typst-preview
+           vertico vterm websocket yafolding))
+   '(safe-local-variable-values
+     '((eval add-hook 'after-save-hook #'org-gfm-export-to-markdown nil t))))
+  (custom-set-faces
+   ;; custom-set-faces was added by Custom.
+   ;; If you edit it by hand, you could mess it up, so be careful.
+   ;; Your init file should contain only one such instance.
+   ;; If there is more than one, they won't work right.
+   '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
