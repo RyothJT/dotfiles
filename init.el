@@ -1433,9 +1433,17 @@ With a prefix ARG, prompts for a session name."
   :custom
   (corfu-auto t)                 ; Enable auto-popup
   (corfu-auto-delay 0.0)         ; Popup delay (seconds)
-  (corfu-auto-prefix 1)          ; Minimum characters before trigger
-  :hook
-  (org-mode . (lambda () (corfu-mode -1))))
+  (corfu-auto-prefix 1)          ; Minimum characters before trigger globally
+
+  ;; Allow Corfu in the minibuffer (e.g., for M-x compile)
+  (defun my/corfu-enable-in-minibuffer ()
+    "Enable Corfu in the minibuffer if completion is supported."
+    (unless (bound-and-true-p mct-mode)
+      (setq-local corfu-echo-delay nil
+                  corfu-popupinfo-delay nil)
+      (corfu-mode 1)))
+
+  (add-hook 'minibuffer-setup-hook #'my/corfu-enable-in-minibuffer)
 
 ;;;; powerline
 (use-package powerline
