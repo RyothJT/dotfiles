@@ -450,6 +450,9 @@
   :config
   (evil-goggles-mode 1))
 
+;;; dired
+(setq dired-dwim-target t)
+
 ;;; custom commands
 ;;;; custom flymake commands
 (use-package flymake
