@@ -1373,10 +1373,27 @@ With a prefix ARG, prompts for a session name."
   (add-hook 'verilog-mode-hook #'my/verilog-font-lock-setup)
   (add-hook 'verilog-mode-hook #'my/verilog-indent-bars-setup))
 
-;;;; eglot + verible (SystemVerilog LSP)
-(use-package eglot
-  :hook (verilog-mode . eglot-ensure)
+;;;; apheleia (direct formatting via typstyle)
+(use-package apheleia
+  :ensure t
   :config
+  ;; Define typstyle as a formatter
+  (add-to-list 'apheleia-formatters '(typstyle "typstyle" "-i" filepath))
+  ;; Assign typstyle to typst-ts-mode
+  (add-to-list 'apheleia-mode-alist '(typst-ts-mode . typstyle))
+  ;; Enable apheleia globally (formats on save automatically)
+  (apheleia-global-mode +1))
+
+;;;; eglot + typst + verilog
+(use-package eglot
+  :hook ((verilog-mode . eglot-ensure)
+         (typst-ts-mode . eglot-ensure))
+  :config
+  ;; Tinymist language server for Typst
+  (add-to-list 'eglot-server-programs
+               '((typst-ts-mode) . ("tinymist")))
+
+  ;; Verible language server for SystemVerilog
   (add-to-list 'eglot-server-programs
                `((verilog-mode) .
                  ,(lambda (_interactive)
