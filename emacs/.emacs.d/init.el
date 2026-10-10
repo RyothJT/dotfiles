@@ -119,10 +119,14 @@
          (scoped-bufs (if persp-bufs
                           (seq-filter (lambda (b) (member b persp-bufs)) win-bufs)
                         win-bufs))
-         ;; 2. Filter out internal buffers (names starting with space)
+         ;; 2. Filter out internal buffers and Magit buffers
          (live-bufs (seq-filter (lambda (b)
                                   (and (buffer-live-p b)
-                                       (not (string-prefix-p " " (buffer-name b)))))
+                                       (not (string-prefix-p " " (buffer-name b)))
+                                       ;; Exclude Magit modes and buffer names
+                                       (not (with-current-buffer b
+                                              (derived-mode-p 'magit-mode 'magit-section-mode)))
+                                       (not (string-match-p "\\`magit" (buffer-name b)))))
                                 scoped-bufs))
          ;; 3. Filter out *special* buffers if normal file tabs are open
          (file-bufs (seq-filter (lambda (b)
@@ -166,6 +170,9 @@
 
 ;; Fallback for unicode characters
 (set-fontset-font t 'unicode "Noto Sans" nil 'append)
+
+;;;; typing
+(electric-pair-mode 1)
 
 ;;;; visual arrow replacement (non-destructive)
 (setq-default prettify-symbols-alist
@@ -414,7 +421,7 @@
   :functions evil-org-set-key-theme
   :hook (org-mode . evil-org-mode)
   :config
-  (evil-org-set-key-theme '(navigation insert textobjects additional todo calendar return)))
+  (evil-org-set-key-theme '(navigation insert textobjects additional calendar return)))
 
 ;;;; evil-goggles
 (use-package evil-goggles
@@ -548,81 +555,126 @@
     (goto-char (point-min))
     (message "Replaced buffer contents with clipboard.")))
 
-;;;; custom format
-(defun my/format-buffer ()
+(defun my/format-buffer (&optional start end)
   "Universal format command.
-Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
-  (interactive)
-  (cond
-   ;; 1. Typst: ALWAYS use typstyle directly (Tinymist/Eglot returns empty edits)
-   ((derived-mode-p 'typst-ts-mode)
-    (if (executable-find "typstyle")
-        (let ((p (point))
-              (temp-buffer (generate-new-buffer " *typstyle-temp*")))
-          (unwind-protect
-              (let ((exit-code (call-process-region (point-min) (point-max) "typstyle" nil temp-buffer nil)))
-                (if (zerop exit-code)
-                    (let ((formatted-text (with-current-buffer temp-buffer (buffer-string))))
-                      ;; Only replace buffer if there is actual content
-                      (unless (string-empty-p formatted-text)
-                        (erase-buffer)
-                        (insert formatted-text)
-                        (goto-char (min p (point-max)))
-                        (message "Formatted Typst buffer with typstyle.")))
-                  (message "typstyle error: syntax error in file, buffer unchanged.")))
-            (kill-buffer temp-buffer)))
-      (user-error "typstyle binary not found in PATH!")))
+Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot.
+Formats active region if START and END are specified/active, otherwise the whole buffer."
+  (interactive "r")
+  (let* ((use-region (use-region-p))
+         (beg (if use-region start (point-min)))
+         (fin (if use-region end (point-max))))
+    (cond
+     ;; 1. Typst: ALWAYS use typstyle directly (Tinymist/Eglot returns empty edits)
+     ((derived-mode-p 'typst-ts-mode)
+      (if (executable-find "typstyle")
+          (let ((p (point))
+                (temp-buffer (generate-new-buffer " *typstyle-temp*")))
+            (unwind-protect
+                (let ((exit-code (call-process-region beg fin "typstyle" nil temp-buffer nil)))
+                  (if (zerop exit-code)
+                      (let ((formatted-text (with-current-buffer temp-buffer (buffer-string))))
+                        ;; Only replace region/buffer if there is actual content
+                        (unless (string-empty-p formatted-text)
+                          (delete-region beg fin)
+                          (goto-char beg)
+                          (insert formatted-text)
+                          (goto-char (min p (point-max)))
+                          (message "Formatted Typst %s with typstyle." (if use-region "region" "buffer"))))
+                    (message "typstyle error: syntax error, region/buffer unchanged.")))
+              (kill-buffer temp-buffer)))
+        (user-error "typstyle binary not found in PATH!")))
 
-   ;; 2. Tcl & XDC (preserves backslashes and constraints)
-   ((derived-mode-p 'tcl-mode)
-    (if (executable-find "tcl-format")
-        (let ((p (point)))
-          (shell-command-on-region (point-min) (point-max) "tcl-format -" nil t)
-          (goto-char (min p (point-max)))
-          (message "Formatted Tcl with tcl-format."))
-      (save-excursion (indent-region (point-min) (point-max)))
-      (message "Re-indented Tcl/XDC buffer.")))
+     ;; 2. Tcl & XDC (preserves backslashes and constraints)
+     ((derived-mode-p 'tcl-mode)
+      (if (executable-find "tcl-format")
+          (let ((p (point)))
+            (shell-command-on-region beg fin "tcl-format -" nil t)
+            (goto-char (min p (point-max)))
+            (message "Formatted Tcl %s with tcl-format." (if use-region "region" "buffer")))
+        (save-excursion (indent-region beg fin))
+        (message "Re-indented Tcl/XDC %s." (if use-region "region" "buffer"))))
 
-   ;; 3. Org Mode: Align tables and indent
-   ((derived-mode-p 'org-mode)
-    (save-excursion
-      (org-table-map-tables #'org-table-align t)
-      (indent-region (point-min) (point-max)))
-    (message "Formatted Org buffer (aligned tables & indented)."))
+     ;; 3. Org Mode: Align tables and indent
+     ((derived-mode-p 'org-mode)
+      (save-excursion
+        (if use-region
+            (indent-region beg fin)
+          (org-table-map-tables #'org-table-align t)
+          (indent-region beg fin)))
+      (message "Formatted Org %s." (if use-region "region" "buffer")))
 
-   ;; 4. Emacs Lisp: Clean indentation
-   ((derived-mode-p 'emacs-lisp-mode)
-    (save-excursion
-      (indent-region (point-min) (point-max)))
-    (message "Indented Emacs Lisp buffer."))
+     ;; 4. Emacs Lisp: Clean indentation
+     ((derived-mode-p 'emacs-lisp-mode)
+      (save-excursion
+        (indent-region beg fin))
+      (message "Indented Emacs Lisp %s." (if use-region "region" "buffer")))
 
-   ;; 5. Active Eglot LSP (C, C++, Verilog/SystemVerilog)
-   ((and (bound-and-true-p eglot--managed-mode)
-         (fboundp 'eglot-format))
-    (call-interactively #'eglot-format)
-    (message "Formatted via active Eglot server."))
+     ;; 5. Active Eglot LSP (C, C++, Verilog/SystemVerilog)
+     ((and (bound-and-true-p eglot--managed-mode)
+           (fboundp 'eglot-format))
+      (if use-region
+          (eglot-format beg fin)
+        (call-interactively #'eglot-format))
+      (message "Formatted via active Eglot server."))
 
-   ;; 6. C/C++ fallback (if Eglot is offline)
-   ((derived-mode-p 'c-mode 'c++-mode 'c-ts-mode 'c++-ts-mode 'c-or-c++-mode)
-    (if (executable-find "clang-format")
-        (let ((p (point)))
-          (shell-command-on-region (point-min) (point-max) "clang-format" nil t)
-          (goto-char (min p (point-max)))
-          (message "Formatted C/C++ with clang-format."))
-      (save-excursion (indent-region (point-min) (point-max)))
-      (message "Re-indented C/C++ buffer.")))
+     ;; 6. C/C++ fallback (if Eglot is offline)
+     ((derived-mode-p 'c-mode 'c++-mode 'c-ts-mode 'c++-ts-mode 'c-or-c++-mode)
+      (if (executable-find "clang-format")
+          (let ((p (point)))
+            (shell-command-on-region beg fin "clang-format" nil t)
+            (goto-char (min p (point-max)))
+            (message "Formatted C/C++ %s with clang-format." (if use-region "region" "buffer")))
+        (save-excursion (indent-region beg fin))
+        (message "Re-indented C/C++ %s." (if use-region "region" "buffer"))))
 
-   ;; 7. General Fallback
-   (t
-    (save-excursion
-      (indent-region (point-min) (point-max)))
-    (message "Indented buffer."))))
+     ;; 7. General Fallback
+     (t
+      (save-excursion
+        (indent-region beg fin))
+      (message "Indented %s." (if use-region "region" "buffer"))))))
 
 ;;;; custom org
 (defun my/org-insert-src-block ()
   "Insert a #+begin_src ... #+end_src block directly (equivalent to `C-c C-, s`)."
   (interactive)
   (org-insert-structure-template "src"))
+
+;;;; custom local-dirs
+(defun my/create-dir-locals-template ()
+  "Generate a standard .dir-locals.el template in the current project root and open it."
+  (interactive)
+  (let* ((project-root (expand-file-name (or (vc-root-dir) default-directory)))
+         (target-file (expand-file-name ".dir-locals.el" project-root))
+         (content (format "((nil . ((compile-command . \" \")
+         (rsync-remote-paths . (\" \"))
+         (rsync-local-path . \"%s/\")
+         (rsync-excluded-dirs . (\".git\" \"data\" \".ipynb_checkpoints\" \".pytest_cache\" \"venv\" \"logs\" \"sim/gen\" \"*.vcd\"))
+         (rsync-sync-on-save . nil)
+         (eval . (progn (require 'rsync-mode) (rsync-mode))))))\n"
+                          (directory-file-name project-root))))
+    (unless (file-exists-p target-file)
+      (with-temp-file target-file
+        (insert content))
+      (message "Created .dir-locals.el in %s" project-root))
+    (find-file target-file)))
+
+(defun my/refresh-project-dir-locals ()
+  "Refresh directory-local variables for all open buffers in the current project."
+  (interactive)
+  (let ((root (expand-file-name (or (vc-root-dir) default-directory))))
+    (dolist (buf (buffer-list))
+      (with-current-buffer buf
+        (when (and buffer-file-name
+                   (string-prefix-p root (expand-file-name buffer-file-name)))
+          (hack-dir-local-variables-non-file-buffer)
+          (message "Refreshed dir-locals for %s" (buffer-name)))))))
+
+(defun my/auto-refresh-dir-locals-on-save ()
+  "Reload dir-locals in all matching project buffers after saving .dir-locals.el."
+  (when (string-equal (file-name-nondirectory (buffer-file-name)) ".dir-locals.el")
+    (my/refresh-project-dir-locals)))
+
+(add-hook 'after-save-hook #'my/auto-refresh-dir-locals-on-save)
 
 ;;; general.el (leader key)
 (use-package general
@@ -795,13 +847,6 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
     "it"  '(org-toggle-heading :which-key "Toggle heading")
     "im"  '(yank-media :which-key "Paste media")
 
-;;;;;; Checkboxes (x) - Cleaned up from 'b'
-    "x"   '(:ignore t :which-key "checkbox")
-    "xx"  '(my/org-checkbox-checked :which-key "Check [X]")
-    "xo"  '(my/org-checkbox-open :which-key "Open [ ]")
-    "xc"  '(my/org-checkbox-cancelled :which-key "Cancel [-]")
-    "xt"  '(org-toggle-checkbox :which-key "Toggle checkbox")
-
 ;;;;;; Tables (T) - Isolated from Babel
     "T"   '(:ignore t :which-key "tables")
     "T-"  '(org-table-insert-hline :which-key "Insert hline")
@@ -836,41 +881,6 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
               "#+author: " user-full-name "\n"
               "#+date: " (format-time-string "<%Y-%m-%d %a %H:%M>") "\n\n")))
 
-  (defun my/org-smart-backspace ()
-    "Delete empty bullets cleanly, otherwise delete characters normally."
-    (interactive)
-    (let ((line (buffer-substring-no-properties (line-beginning-position) (point))))
-      (if (string-match-p "^\\s-*\\(- \\|\\* \\|\\+ \\|[0-9]+\\.\\s-\\)\\s-*$" line)
-          (kill-line 0)
-        (call-interactively #'backward-delete-char-untabify))))
-
-  (defun my/org-set-checkbox (state)
-    "Set the checkbox state at point to STATE (\"[ ]\", \"[X]\", or \"[-]\", inserting one if missing."
-    (save-excursion
-      (beginning-of-line)
-      (if (re-search-forward "\\[[ X-]\\]" (line-end-position) t)
-          (replace-match state)
-        (if (re-search-forward "^\\(\\s-*\\(?:[-+*]\\|[0-9]+[.)]\\)\\)\\(\\s-+\\)" (line-end-position) t)
-            (replace-match (concat "\\1 " state "\\2"))
-          (beginning-of-line)
-          (skip-chars-forward " \t")
-          (insert "- " state " ")))))
-
-  (defun my/org-checkbox-checked ()
-    "Set checkbox to checked [X], inserting a checkbox if missing."
-    (interactive)
-    (my/org-set-checkbox "[X]"))
-
-  (defun my/org-checkbox-cancelled ()
-    "Set checkbox to cancelled [-], inserting a checkbox if missing."
-    (interactive)
-    (my/org-set-checkbox "[-]"))
-
-  (defun my/org-checkbox-open ()
-    "Set checkbox to open [ ], inserting a checkbox if missing."
-    (interactive)
-    (my/org-set-checkbox "[ ]"))
-
   (defun my/org-find-class-headline ()
     "Prompt for a class code, store it for the header function, and locate or create its headline."
     (let ((class-code (completing-read "Class Code: " '("CSCI5607" "EE5301" "EE5327" "EE8350"))))
@@ -902,8 +912,6 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
       (format "%s Lecture %d :2026F:%s:" class-code next-num class-code)))
 
   :hook (find-file . my/auto-insert-org-template)
-  :bind (:map org-mode-map
-              ("DEL" . my/org-smart-backspace))
   :custom
   (org-directory "~/org")
   (org-hide-leading-stars t)
@@ -913,8 +921,9 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
   (org-hide-emphasis-markers t)
   (org-pretty-entities t)
   (org-use-sub-superscripts '{})
-  (org-cycle-level-after-item/entry-creation nil)
-  (org-cycle-emulate-tab nil)
+  (org-cycle-level-after-item/entry-creation t)
+  (org-blank-before-new-entry '((heading . auto)
+                                (plain-list-item . nil)))(org-cycle-emulate-tab nil)
 
   (org-agenda-files '("~/org/todo.org"
                       "~/org/meetings"
@@ -1204,28 +1213,42 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
   :config
   (require 'consult)
 
-  ;; Safely assemble available sources without void-variable errors
   (defun my/consult-workspace-buffer ()
-    "Switch to a buffer in the active workspace."
+    "Switch to a normal buffer in the active workspace."
     (interactive)
-    (let ((sources (delq nil
-                         (list my/consult--source-perspective
-                               (when (boundp 'consult--source-recent-file)
-                                 consult--source-recent-file)
-                               (when (boundp 'consult--source-bookmark)
-                                 consult--source-bookmark)))))
-      (consult-buffer sources)))
+    (if (and (bound-and-true-p persp-mode)
+             (fboundp 'persp-current-buffers))
+        (let ((workspace-bufs
+               (lambda ()
+                 (seq-filter
+                  (lambda (buf-name)
+                    ;; Exclude special buffers (*...) and hidden buffers ( ...)
+                    (and (not (string-prefix-p "*" buf-name))
+                         (not (string-prefix-p " " buf-name))))
+                  (mapcar #'buffer-name (persp-current-buffers))))))
+          (consult-buffer
+           (list
+            `(:name     "Workspace Buffers"
+                        :narrow   ?b
+                        :category buffer
+                        :face     consult-buffer
+                        :history  buffer-name-history
+                        :state    ,#'consult--buffer-state
+                        :items    ,workspace-bufs)
+            (when (boundp 'consult-source-recent-file) consult-source-recent-file)
+            (when (boundp 'consult-source-bookmark) consult-source-bookmark))))
+      (consult-buffer)))
 
   (defun my/consult-global-buffer ()
     "Switch to any open buffer across all workspaces."
     (interactive)
     (let ((sources (delq nil
-                         (list (when (boundp 'consult--source-buffer)
-                                 consult--source-buffer)
-                               (when (boundp 'consult--source-recent-file)
-                                 consult--source-recent-file)
-                               (when (boundp 'consult--source-bookmark)
-                                 consult--source-bookmark)))))
+                         (list (when (boundp 'consult-source-buffer)
+                                 consult-source-buffer)
+                               (when (boundp 'consult-source-recent-file)
+                                 consult-source-recent-file)
+                               (when (boundp 'consult-source-bookmark)
+                                 consult-source-bookmark)))))
       (consult-buffer sources))))
 
 ;;;; magit
@@ -1370,7 +1393,8 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
   :config
   ;; Tinymist language server for Typst
   (add-to-list 'eglot-server-programs
-               '((typst-ts-mode) . ("tinymist")))
+               '((typst-ts-mode) . ("tinymist" :initializationOptions
+                                    (:formatterMode "typstyle"))))
 
   ;; Verible language server for SystemVerilog
   (add-to-list 'eglot-server-programs
@@ -1395,228 +1419,256 @@ Prioritizes dedicated CLI tools (Typst/Tcl) before falling back to Eglot."
           :workspace/didChangeConfiguration)))
 
 ;;;; clangd
-  (with-eval-after-load 'eglot
-    (add-to-list 'eglot-server-programs
-                 `((c-mode c++-mode c-or-c++-mode)
-                   . ("clangd"
-                      "--compile-commands-dir=build"
-                      "--background-index"
-                      "--inlay-hints=true"))))
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               `((c-mode c++-mode c-or-c++-mode)
+                 . ("clangd"
+                    "--compile-commands-dir=build"
+                    "--background-index"
+                    "--inlay-hints=true"))))
 
-  (add-hook 'c-mode-hook #'eglot-inlay-hints-mode)
-  (add-hook 'c++-mode-hook #'eglot-inlay-hints-mode)
+(add-hook 'c-mode-hook #'eglot-inlay-hints-mode)
+(add-hook 'c++-mode-hook #'eglot-inlay-hints-mode)
 
 ;;;; corfu
-  (use-package corfu
-    :init
-    (global-corfu-mode)
-    :custom
-    (corfu-auto t)
-    (corfu-auto-delay 0.0)
-    (corfu-auto-prefix 1)
-    :config
-    (defun my/corfu-enable-in-minibuffer ()
-      "Enable Corfu in the minibuffer if completion is supported."
-      (unless (bound-and-true-p mct-mode)
-        (setq-local corfu-echo-delay nil
-                    corfu-popupinfo-delay nil)
-        (corfu-mode 1)))
-    (add-hook 'minibuffer-setup-hook #'my/corfu-enable-in-minibuffer))
+(use-package corfu
+  :init
+  (global-corfu-mode)
+  :custom
+  (corfu-auto t)
+  (corfu-auto-delay 0.5)
+  (corfu-auto-prefix 1)
+  :config
+  (defun my/corfu-enable-in-minibuffer ()
+    "Enable Corfu in the minibuffer if completion is supported."
+    (unless (bound-and-true-p mct-mode)
+      (setq-local corfu-echo-delay nil
+                  corfu-popupinfo-delay nil)
+      (corfu-mode 1)))
+  (add-hook 'minibuffer-setup-hook #'my/corfu-enable-in-minibuffer))
 
 ;;;; powerline
-  (use-package powerline
-    :defines (projectile-mode-line-prefix
-              projectile-mode-line-function
-              powerline-height
-              powerline-default-separator)
-    :functions (powerline-center-evil-theme
-                powerline-reset
-                projectile-project-name
-                catppuccin-get-color)
-    :preface
-    (defun my/update-powerline-height ()
-      "Set powerline height based on actual rendered font pixel height."
-      (let* ((info (font-info (face-font 'default)))
-             (pixel-height (+ (aref info 2) (aref info 3)))  ; ascent + descent
-             (padding 0))
-        (setq powerline-height (+ pixel-height padding))
-        (powerline-reset)))
-    :custom
-    (projectile-mode-line-prefix " ")
-    :config
-    (setq powerline-default-separator 'bar)
-    (my/update-powerline-height)
-    (add-hook 'after-make-frame-functions
-              (lambda (_) (my/update-powerline-height)))
-    (powerline-center-evil-theme)
-    (setq projectile-mode-line-function
-          (lambda ()
-            (format " [%s]" (projectile-project-name))))
-    (set-face-attribute 'mode-line nil :height 1.0)
-    (set-face-attribute 'mode-line-inactive nil :height 1.0)
-    (let ((bar-color (catppuccin-get-color 'pink))
-          (dark-fg    (catppuccin-get-color 'crust)))
-      (set-face-attribute 'powerline-active0 nil
-                          :background bar-color
-                          :foreground dark-fg)))
+(use-package powerline
+  :defines (projectile-mode-line-prefix
+            projectile-mode-line-function
+            powerline-height
+            powerline-default-separator)
+  :functions (powerline-center-evil-theme
+              powerline-reset
+              projectile-project-name
+              catppuccin-get-color)
+  :preface
+  (defun my/update-powerline-height ()
+    "Set powerline height based on actual rendered font pixel height."
+    (let* ((info (font-info (face-font 'default)))
+           (pixel-height (+ (aref info 2) (aref info 3)))  ; ascent + descent
+           (padding 0))
+      (setq powerline-height (+ pixel-height padding))
+      (powerline-reset)))
+  :custom
+  (projectile-mode-line-prefix " ")
+  :config
+  (setq powerline-default-separator 'bar)
+  (my/update-powerline-height)
+  (add-hook 'after-make-frame-functions
+            (lambda (_) (my/update-powerline-height)))
+  (powerline-center-evil-theme)
+  (setq projectile-mode-line-function
+        (lambda ()
+          (format " [%s]" (projectile-project-name))))
+  (set-face-attribute 'mode-line nil :height 1.0)
+  (set-face-attribute 'mode-line-inactive nil :height 1.0)
+  (let ((bar-color (catppuccin-get-color 'pink))
+        (dark-fg    (catppuccin-get-color 'crust)))
+    (set-face-attribute 'powerline-active0 nil
+                        :background bar-color
+                        :foreground dark-fg)))
 
 ;;;; rainbow delimiters
-  (use-package rainbow-delimiters
-    :hook (prog-mode . rainbow-delimiters-mode))
+(use-package rainbow-delimiters
+  :hook (prog-mode . rainbow-delimiters-mode))
 
 ;;;; indent-bars - Visual scope lines
-  (use-package indent-bars
-    :functions (indent-bars-mode)
-    :hook (prog-mode . indent-bars-mode)
-    :custom
-    (indent-bars-treesitter-support t)
-    (indent-bars-no-descend-string t))
+(use-package indent-bars
+  :functions (indent-bars-mode)
+  :hook (prog-mode . indent-bars-mode)
+  :custom
+  (indent-bars-treesitter-support t)
+  (indent-bars-no-descend-string t))
 
 ;;;; tldr
-  (use-package tldr)
+(use-package tldr)
 
 ;;;; ripgrep
-  (use-package rg)
+(use-package rg)
 
 ;;;; wgrep
-  (use-package wgrep)
+(use-package wgrep)
 
 ;;;; keyfreq
-  (use-package keyfreq
-    :functions (keyfreq-mode keyfreq-autosave-mode)
-    :config
-    (keyfreq-mode 1)
-    (keyfreq-autosave-mode 1))
+(use-package keyfreq
+  :functions (keyfreq-mode keyfreq-autosave-mode)
+  :config
+  (keyfreq-mode 1)
+  (keyfreq-autosave-mode 1))
 
 ;;;; yafolding
-  (use-package yafolding
-    :defines (yafolding-ellipsis-content
-              yafolding-mode-map)
-    :functions (my/yafolding-pad-ellipsis
-                yafolding-toggle-element)
-    :hook ((prog-mode . yafolding-mode)
-           (emacs-lisp-mode . (lambda () (yafolding-mode -1))))
-    :config
-    (defun my/yafolding-pad-ellipsis (region)
-      "Pad `yafolding-ellipsis-content' to column 80 with line count prefix."
-      (when (and region (listp region) (numberp (car region)) (numberp (cadr region)))
-        (let* ((beg (car region))
-               (end (cadr region))
-               (lines-folded (count-lines beg end))
-               (line-len (- (line-end-position) (line-beginning-position)))
-               (target-col 80)
-               (prefix (format " [+%d lines]  " lines-folded))
-               (base-suffix "│")
-               ;; Only include the suffix if the line length + prefix + suffix fits within 80 characters
-               (suffix (if (<= (+ line-len (length prefix) (length base-suffix)) target-col)
-                           base-suffix
-                         ""))
-               (pad-count (max 0 (- target-col line-len (length prefix) (length suffix)))))
-          (setq yafolding-ellipsis-content
-                (concat prefix (make-string pad-count ?─) suffix))))
-      region)
+(use-package yafolding
+  :defines (yafolding-ellipsis-content
+            yafolding-mode-map)
+  :functions (my/yafolding-pad-ellipsis
+              yafolding-toggle-element)
+  :hook ((prog-mode . yafolding-mode)
+         (emacs-lisp-mode . (lambda () (yafolding-mode -1))))
+  :config
+  (defun my/yafolding-pad-ellipsis (region)
+    "Pad `yafolding-ellipsis-content' to column 80 with line count prefix."
+    (when (and region (listp region) (numberp (car region)) (numberp (cadr region)))
+      (let* ((beg (car region))
+             (end (cadr region))
+             (lines-folded (count-lines beg end))
+             (line-len (- (line-end-position) (line-beginning-position)))
+             (target-col 80)
+             (prefix (format " [+%d lines]  " lines-folded))
+             (base-suffix "│")
+             ;; Only include the suffix if the line length + prefix + suffix fits within 80 characters
+             (suffix (if (<= (+ line-len (length prefix) (length base-suffix)) target-col)
+                         base-suffix
+                       ""))
+             (pad-count (max 0 (- target-col line-len (length prefix) (length suffix)))))
+        (setq yafolding-ellipsis-content
+              (concat prefix (make-string pad-count ?─) suffix))))
+    region)
 
-    (advice-add 'yafolding-get-element-region :filter-return #'my/yafolding-pad-ellipsis)
+  (advice-add 'yafolding-get-element-region :filter-return #'my/yafolding-pad-ellipsis)
 
-    (set-face-attribute 'yafolding-ellipsis-face nil
-                        :background (catppuccin-get-color 'base)
-                        :foreground (catppuccin-get-color 'peach)
-                        :weight 'bold)
+  (set-face-attribute 'yafolding-ellipsis-face nil
+                      :background (catppuccin-get-color 'base)
+                      :foreground (catppuccin-get-color 'peach)
+                      :weight 'bold)
 
-    (with-eval-after-load 'evil
-      (evil-define-key 'normal yafolding-mode-map
-        (kbd "TAB") #'yafolding-toggle-element)))
+  (with-eval-after-load 'evil
+    (evil-define-key 'normal yafolding-mode-map
+      (kbd "TAB") #'yafolding-toggle-element)))
 
 ;;;; typst
-  (use-package treesit
-    :ensure nil
-    :config
-    (add-to-list 'treesit-language-source-alist
-                 '(typst "git@github.com:uben0/tree-sitter-typst.git")))
+(use-package treesit
+  :ensure nil
+  :config
+  (add-to-list 'treesit-language-source-alist
+               '(typst "git@github.com:uben0/tree-sitter-typst.git")))
 
-  (use-package typst-ts-mode
-    :custom
-    (typst-ts-mode-watch-options "--open")
-    :hook
-    (typst-ts-mode . (lambda ()
-                       ;; Match lines starting with one or more '=' followed by whitespace
-                       (setq-local outline-regexp "=+\\s-")
-                       ;; Define where the heading level ends for proper outline parsing
-                       (setq-local outline-heading-end-regexp "\n")
-                       (outline-minor-mode 1)
-                       ;; Apply custom highlighting face to Typst headers
-                       (font-lock-add-keywords nil
-                                               '(("^=+\\s-.*$" 0 'my/outline-header-face prepend)))))
-    :config
-    (add-to-list 'auto-mode-alist '("\\.typ\\'" . typst-ts-mode)))
+(use-package typst-ts-mode
+  :custom
+  (typst-ts-mode-watch-options "--open")
+  :hook
+  (typst-ts-mode . (lambda ()
+                     ;; Match lines starting with one or more '=' followed by whitespace
+                     (setq-local outline-regexp "=+\\s-")
+                     ;; Define where the heading level ends for proper outline parsing
+                     (setq-local outline-heading-end-regexp "\n")
+                     (outline-minor-mode 1)
+                     ;; Apply custom highlighting face to Typst headers
+                     (font-lock-add-keywords nil
+                                             '(("^=+\\s-.*$" 0 'my/outline-header-face prepend)))))
+  :config
+  (add-to-list 'auto-mode-alist '("\\.typ\\'" . typst-ts-mode)))
 
-  (use-package websocket)
+(use-package websocket)
 
-  (use-package typst-preview
-    ;; :load-path "path/to/typst-preview.el" ;; if installed manually
-    :init
-    (setq typst-preview-autostart t) ; start preview automatically when typst-preview-mode is activated
-    (setq typst-preview-open-browser-automatically nil) ; open browser automatically when typst-preview-start is run
-    (setq typst-preview-host "127.0.0.1:6973")
+(use-package typst-preview
+  ;; :load-path "path/to/typst-preview.el" ;; if installed manually
+  :init
+  (setq typst-preview-autostart t) ; start preview automatically when typst-preview-mode is activated
+  (setq typst-preview-open-browser-automatically nil) ; open browser automatically when typst-preview-start is run
+  (setq typst-preview-host "127.0.0.1:6973")
 
-    :custom
-    (typst-preview-browser "default") 	; this is the default option; other options are `eaf-browser' or `xwidget'.
-    (typst-preview-invert-colors "true")	; invert colors depending on system theme
-    (typst-preview-executable "tinymist") ; path to tinymist binary (relative or absolute)
-    (typst-preview-partial-rendering t)   ; enable partial rendering 
-    
-    :config
-    (define-key typst-preview-mode-map (kbd "C-c C-j") 'typst-preview-send-position))
+  :custom
+  (typst-preview-browser "default") 	; this is the default option; other options are `eaf-browser' or `xwidget'.
+  (typst-preview-invert-colors "true")	; invert colors depending on system theme
+  (typst-preview-executable "tinymist") ; path to tinymist binary (relative or absolute)
+  (typst-preview-partial-rendering t)   ; enable partial rendering 
+  
+  :config
+  (define-key typst-preview-mode-map (kbd "C-c C-j") 'typst-preview-send-position))
 
-  (defun my/org-typst-preview-region (start end)
-    "Compile selection to SVG via Typst CLI and display inline."
-    (interactive "r")
-    (let* ((text (buffer-substring-no-properties start end))
-           (tmp-typ (make-temp-file "org-typst-" nil ".typ"))
-           (tmp-svg (make-temp-file "org-typst-" nil ".svg")))
-      (write-region (concat "$ " text " $") nil tmp-typ)
-      (if (zerop (call-process "typst" nil nil nil "compile" tmp-typ tmp-svg))
-          (let ((ov (make-overlay start end)))
-            (overlay-put ov 'display (create-image tmp-svg 'svg nil :ascent 'center))
-            (overlay-put ov 'evaporate t))
-        (message "Typst compilation failed."))))
+(defun my/org-typst-preview-region (start end)
+  "Compile selection to SVG via Typst CLI and display inline."
+  (interactive "r")
+  (let* ((text (buffer-substring-no-properties start end))
+         (tmp-typ (make-temp-file "org-typst-" nil ".typ"))
+         (tmp-svg (make-temp-file "org-typst-" nil ".svg")))
+    (write-region (concat "$ " text " $") nil tmp-typ)
+    (if (zerop (call-process "typst" nil nil nil "compile" tmp-typ tmp-svg))
+        (let ((ov (make-overlay start end)))
+          (overlay-put ov 'display (create-image tmp-svg 'svg nil :ascent 'center))
+          (overlay-put ov 'evaporate t))
+      (message "Typst compilation failed."))))
 
 ;;;; markdown mode
-  (use-package markdown-mode
-    :mode ("\\.md\\'" . gfm-mode)
-    :init
-    ;; Use gfm-mode (GitHub Flavored Markdown) for previewing and code block features
-    (setq markdown-command "multimarkdown")
-    :config
-    ;; Enable syntax highlighting inside code blocks in the main buffer
-    (setq markdown-fontify-code-blocks-natively t)
-    
-    ;; Map markdown language identifiers to Emacs major modes
-    (setq markdown-code-lang-modes
-          '(("elisp" . emacs-lisp-mode)
-            ("c++" . c++-mode)
-            ("cpp" . c++-mode)
-            ("py" . python-mode)
-            ("python" . python-mode)
-            ("json" . js-mode)
-            ("sh" . sh-mode)
-            ("bash" . sh-mode))))
+(use-package markdown-mode
+  :mode ("\\.md\\'" . gfm-mode)
+  :init
+  ;; Use gfm-mode (GitHub Flavored Markdown) for previewing and code block features
+  (setq markdown-command "multimarkdown")
+  :config
+  ;; Enable syntax highlighting inside code blocks in the main buffer
+  (setq markdown-fontify-code-blocks-natively t)
+  
+  ;; Map markdown language identifiers to Emacs major modes
+  (setq markdown-code-lang-modes
+        '(("elisp" . emacs-lisp-mode)
+          ("c++" . c++-mode)
+          ("cpp" . c++-mode)
+          ("py" . python-mode)
+          ("python" . python-mode)
+          ("json" . js-mode)
+          ("sh" . sh-mode)
+          ("bash" . sh-mode))))
+
+;;;; rsync-mode
+(use-package rsync-mode
+  :commands (rsync-mode rsync-full-sync rsync-incremental-sync)
+  :init
+  ;; Safe local variable predicates
+  (put 'rsync-remote-paths 'safe-local-variable #'listp)
+  (put 'rsync-local-path 'safe-local-variable #'stringp)
+  (put 'rsync-excluded-dirs 'safe-local-variable #'listp)
+  (put 'rsync-sync-on-save 'safe-local-variable #'booleanp)
+
+  ;; Mark specific eval forms as safe
+  (put 'eval 'safe-local-variable
+       (lambda (val)
+         (member val '((progn (require 'rsync-mode) (rsync-mode))))))
+  :config
+  (setq rsync-mode-arguments '("-azP")))
 
 ;;;; custom
-  (custom-set-variables
-   '(auth-source-save-behavior nil)
-   '(custom-safe-themes
-     '("c4df9006b9eb32599d758800a32f3487c2cdf13826084511783b47d419024af2"
-       default))
-   '(package-selected-packages
-     '(catppuccin-theme centered-cursor-mode consult corfu diff-hl
-                        evil evil-collection evil-goggles evil-nerd-commenter evil-org
-                        evil-surround gcmh general indent-bars keyfreq magit marginalia
-                        markdown-mode no-littering orderless org-modern ox-gfm perspective
-                        powerline projectile rainbow-delimiters typst-preview
-                        typst-ts-mode vertico websocket wgrep which-key yafolding))
-   '(safe-local-variable-values
-     '((eval add-hook 'after-save-hook #'org-gfm-export-to-markdown nil t))))
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(auth-source-save-behavior nil)
+ '(custom-safe-themes
+   '("c4df9006b9eb32599d758800a32f3487c2cdf13826084511783b47d419024af2"
+     default))
+ '(package-selected-packages
+   '(catppuccin-theme centered-cursor-mode consult corfu diff-hl evil
+                      evil-collection evil-goggles evil-nerd-commenter
+                      evil-org evil-surround gcmh general indent-bars
+                      keyfreq magit marginalia markdown-mode
+                      no-littering orderless org-modern ox-gfm
+                      perspective powerline projectile
+                      rainbow-delimiters rsync-mode typst-preview
+                      typst-ts-mode vertico websocket wgrep which-key
+                      yafolding))
+ '(safe-local-variable-values
+   '((eval add-hook 'after-save-hook #'org-gfm-export-to-markdown nil t))))
 
-  (custom-set-faces
-   '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(org-modern-label ((t (:height 0.9 :weight bold :inherit nil)))))
