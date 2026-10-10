@@ -1338,14 +1338,46 @@ Formats active region if START and END are specified/active, otherwise the whole
 ;;;; avy jumper (helix gw emulator)
 (use-package avy
   :defines (avy-all-windows my/helix-gw)
-  :functions (avy-with avy-process avy--regex-candidates)
-  :custom
-  (avy-keys '(?a ?s ?d ?f ?j ?k ?l ?e ?r ?u ?i ?o ?w ?v ?c ?m))
+  :functions (avy-with avy-process avy--regex-candidates avy-tree)
   :config
+  ;; Full layouts (commented out)
+  (defvar my/avy-left-hand-keys '(?a ?s ?d ?f ?w ?e ?r ?t ?v ?c))
+  (defvar my/avy-right-hand-keys '(?h ?j ?k ?l ?y ?u ?i ?o ?n ?m))
+
+  ;; Minimal baseline for testing
+  ;; (defvar my/avy-left-hand-keys '(?a ?s))
+  ;; (defvar my/avy-right-hand-keys '(?h ?j))
+
+  (defun my/avy-build-alternating-tree (lst keys hand)
+    "Recursively split LST into tree nodes alternating between left and right hands."
+    (let* ((current-keys (if (eq hand 'left) my/avy-left-hand-keys my/avy-right-hand-keys))
+           (next-hand (if (eq hand 'left) 'right 'left))
+           (num-keys (length current-keys))
+           (len (length lst)))
+      (if (<= len num-keys)
+          ;; Base case: Leaf node fits within current hand key capacity
+          (cl-mapcar (lambda (k leaf) (cons k (cons 'leaf leaf))) current-keys lst)
+        ;; Recursive case: Subdivide candidate list across available keys
+        (let ((res nil)
+              (sub-lists (avy-subdiv len num-keys)))
+          (cl-loop for sub-len in sub-lists
+                   for k in current-keys
+                   do (let ((sub-lst (avy-multipop lst sub-len)))
+                        (push (cons k (if (= sub-len 1)
+                                          (cons 'leaf (car sub-lst))
+                                        (my/avy-build-alternating-tree sub-lst keys next-hand)))
+                              res)))
+          (nreverse res)))))
+
+  (defun my/avy-strict-alternating-tree (lst keys)
+    "Override `avy-tree` to force strictly alternating hand sequences at any depth."
+    (my/avy-build-alternating-tree lst keys 'left))
+
+  (advice-add 'avy-tree :override #'my/avy-strict-alternating-tree)
+
   (defun my/helix-gw ()
     "Jump to any visible word instantly, mimicking Helix's `gw' command."
     (interactive)
-    ;; Force avy to label all words matching a word-boundary regex instantly
     (let ((avy-all-windows t))
       (avy-with my/helix-gw
         (avy-process (avy--regex-candidates "\\b[a-zA-Z0-9_]"))))))
