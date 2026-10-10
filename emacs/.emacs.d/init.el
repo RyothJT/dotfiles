@@ -14,7 +14,7 @@
   :defines (gcmh-high-cons-threshold)
   :functions (gcmh-mode)
   :config
-  (setq gcmh-high-cons-threshold (* 64 1024 1024))
+  (setq gcmh-high-cons-threshold (* 128 1024 1024))
   (gcmh-mode 1))
 
 ;;;; no-littering (redirects backups, autosaves, and caches)
@@ -249,25 +249,29 @@
   :custom
   (persp-mode-prefix-key (kbd "C-c M-p"))
   (persp-initial-frame-name "Main")
+  ;; Prevent auto-creating/switching to new perspectives on new frames
+  (persp-init-new-frame-behaviour-override 'none)
+  (persp-switch-to-added-buffer-after-change nil)
   :init
   (persp-mode 1)
   :config
-  (setq confirm-kill-processes nil) ; Prevent prompt about active processes on exit
+  (setq confirm-kill-processes nil)
 
   (defvar my/persp-state-file
     (if (fboundp 'no-littering-expand-var-file-name)
         (no-littering-expand-var-file-name "perspective-state.el")
       (expand-file-name "perspective-state.el" user-emacs-directory)))
 
-  ;; Save silently without overwrite prompts
+  ;; Save asking once, then silently handle internal overwrite prompts
   (defun my/persp-save-session ()
-    "Save perspective state silently without confirmation prompts."
+    "Save perspective state asking once, suppressing inner confirmation prompts."
     (interactive)
     (when (bound-and-true-p persp-mode)
-      (cl-letf (((symbol-function 'y-or-n-p) #'always)
-                ((symbol-function 'yes-or-no-p) #'always))
-        (persp-state-save my/persp-state-file))
-      (message "Perspective session saved.")))
+      (when (y-or-n-p "Save perspective session? ")
+        (cl-letf (((symbol-function 'y-or-n-p) #'always)
+                  ((symbol-function 'yes-or-no-p) #'always))
+          (persp-state-save my/persp-state-file))
+        (message "Perspective session saved."))))
 
   ;; Load silently without overwrite prompts
   (defun my/persp-load-session ()
@@ -278,7 +282,8 @@
       (cl-letf (((symbol-function 'y-or-n-p) #'always)
                 ((symbol-function 'yes-or-no-p) #'always))
         (persp-state-load my/persp-state-file))
-      (tab-bar-mode 1)
+      (when (display-graphic-p)
+        (tab-bar-mode 1))
       (message "Perspective session loaded.")))
 
   (defun my/quit-emacs ()
@@ -307,11 +312,19 @@
             (restart-emacs)
           (kill-emacs)))))
 
-  ;; Auto-save on exit without prompting
-  (add-hook 'kill-emacs-hook #'my/persp-save-session)
-
   ;; Auto-load on startup without prompting
   (add-hook 'emacs-startup-hook #'my/persp-load-session)
+
+  ;; Purge auto-generated hex frame perspectives prior to saving
+  (defun my/persp-cleanup-frame-persps (&rest _)
+    "Remove auto-generated frame ID perspectives (8-char hex strings)."
+    (interactive)
+    (when (bound-and-true-p persp-mode)
+      (dolist (name (persp-names))
+        (when (string-match-p "\\`[0-9a-f]\\{8\\}\\'" name)
+          (persp-kill name)))))
+
+  (advice-add 'persp-state-save :before #'my/persp-cleanup-frame-persps)
 
   (setq persp-show-modestring nil)
 
@@ -1642,6 +1655,15 @@ Formats active region if START and END are specified/active, otherwise the whole
          (member val '((progn (require 'rsync-mode) (rsync-mode))))))
   :config
   (setq rsync-mode-arguments '("-azP")))
+
+;;;; xclip
+(use-package xclip
+  :ensure t
+  :config
+  (setq xclip-select-enable-clipboard t)
+  (setq xclip-program "wl-copy")
+  (setq xclip-method 'wl-copy)
+  (xclip-mode 1))
 
 ;;;; custom
 (custom-set-variables
