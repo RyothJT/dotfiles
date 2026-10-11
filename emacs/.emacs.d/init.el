@@ -171,9 +171,6 @@
 ;; Fallback for unicode characters
 (set-fontset-font t 'unicode "Noto Sans" nil 'append)
 
-;;;; typing
-(electric-pair-mode 1)
-
 ;;;; visual arrow replacement (non-destructive)
 (setq-default prettify-symbols-alist
               '(("-->" . ?→)
