@@ -7,6 +7,7 @@ DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Packages that target the home directory (~)
 USER_PACKAGES=(
     "emacs"
+    "kde"
 )
 
 # Packages that target the root directory (/)
